@@ -1,0 +1,122 @@
+@page "/admin/good-deals"
+@using MarketplaceApi.Data
+@using MarketplaceApi.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Bonnes affaires - Admin</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-star-fill text-warning"></i> Bonnes affaires</h1>
+    <span class="badge bg-info fs-5">@_annonces.Count opportunités</span>
+</div>
+
+<p class="text-muted mb-4">
+    Les annonces marquées comme "bonne affaire" pour le magasin. 
+    Ces opportunités d'achat sont à traiter en priorité.
+</p>
+
+@if (_annonces.Any())
+{
+    <div class="row g-4">
+        @foreach (var annonce in _annonces)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-warning">
+                    <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between">
+                        <span><i class="bi bi-star-fill text-warning"></i> Bonne affaire</span>
+                        <span class="badge @GetStatusBadgeClass(annonce.Status)">
+                            @GetStatusLabel(annonce.Status)
+                        </span>
+                    </div>
+                    
+                    @if (annonce.Images.Any())
+                    {
+                        <img src="@annonce.Images.OrderBy(i => i.DisplayOrder).First().ImagePath" 
+                             class="card-img-top" 
+                             style="height: 180px; object-fit: cover;" 
+                             alt="@annonce.Title" />
+                    }
+                    
+                    <div class="card-body">
+                        <h5 class="card-title">@annonce.Title</h5>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <p class="mb-0 text-muted small">Prix demandé</p>
+                                <h5 class="mb-0 text-primary">@annonce.Price.ToString("N0") €</h5>
+                            </div>
+                            @if (annonce.StorePriceEstimate.HasValue)
+                            {
+                                <div class="text-end">
+                                    <p class="mb-0 text-muted small">Estimation magasin</p>
+                                    <h5 class="mb-0 text-success">@annonce.StorePriceEstimate.Value.ToString("N0") €</h5>
+                                </div>
+                            }
+                        </div>
+                        
+                        @if (annonce.StorePriceEstimate.HasValue && annonce.StorePriceEstimate > annonce.Price)
+                        {
+                            var profit = annonce.StorePriceEstimate.Value - annonce.Price;
+                            var profitPercent = (profit / annonce.Price) * 100;
+                            <div class="alert alert-success py-2 mb-2">
+                                <i class="bi bi-graph-up-arrow"></i>
+                                Marge potentielle: <strong>@profit.ToString("N0") € (+@profitPercent.ToString("N0")%)</strong>
+                            </div>
+                        }
+                        
+                        <p class="card-text small text-muted">
+                            <i class="bi bi-person me-1"></i>@annonce.User.Name<br/>
+                            <i class="bi bi-telephone me-1"></i>@annonce.User.Phone<br/>
+                            <i class="bi bi-geo-alt me-1"></i>@annonce.City
+                        </p>
+                    </div>
+                    
+                    <div class="card-footer bg-white">
+                        <a href="/admin/annonces/@annonce.Id" class="btn btn-primary w-100">
+                            <i class="bi bi-eye"></i> Voir détails
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="text-center py-5">
+        <i class="bi bi-star text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3 text-muted">Aucune bonne affaire identifiée</h4>
+        <p class="text-muted">Marquez des annonces comme "bonne affaire" depuis leur page de détail.</p>
+    </div>
+}
+
+@code {
+    private List<Annonce> _annonces = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _annonces = await DbContext.Annonces
+            .Include(a => a.User)
+            .Include(a => a.Images)
+            .Where(a => a.IsGoodDeal)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+    }
+
+    private string GetStatusBadgeClass(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.Approved => "bg-success",
+        AnnonceStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusLabel(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.Approved => "Approuvée",
+        AnnonceStatus.Rejected => "Refusée",
+        _ => status.ToString()
+    };
+}

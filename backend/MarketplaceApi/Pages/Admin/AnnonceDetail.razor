@@ -1,0 +1,289 @@
+@page "/admin/annonces/{Id:int}"
+@using MarketplaceApi.Data
+@using MarketplaceApi.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>Détail Annonce - Admin</PageTitle>
+
+@if (_annonce == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="mb-4">
+        <a href="/admin/pending" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Retour
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Left Column - Images & Details -->
+        <div class="col-lg-8">
+            <!-- Images -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Photos (@_annonce.Images.Count)</h5>
+                </div>
+                <div class="card-body">
+                    @if (_annonce.Images.Any())
+                    {
+                        <div class="row g-2">
+                            @foreach (var image in _annonce.Images.OrderBy(i => i.DisplayOrder))
+                            {
+                                <div class="col-md-4">
+                                    <img src="@image.ImagePath" class="img-fluid rounded" alt="Photo" 
+                                         style="width: 100%; height: 200px; object-fit: cover;" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Aucune photo</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Informations</h5>
+                </div>
+                <div class="card-body">
+                    <h4>@_annonce.Title</h4>
+                    <h3 class="text-primary">@_annonce.Price.ToString("N0") €</h3>
+                    
+                    <hr />
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Catégorie:</strong> @_annonce.Category</p>
+                            <p><strong>État:</strong> @(_annonce.State == ProductState.New ? "Neuf" : "Occasion")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Ville:</strong> @_annonce.City</p>
+                            <p><strong>Date:</strong> @_annonce.CreatedAt.ToString("dd/MM/yyyy HH:mm")</p>
+                        </div>
+                    </div>
+                    
+                    <p><strong>Description:</strong></p>
+                    <p class="text-muted">@_annonce.Description</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Actions & Notes -->
+        <div class="col-lg-4">
+            <!-- Status & Actions -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Statut</h5>
+                    <span class="badge @GetStatusBadgeClass(_annonce.Status)">@GetStatusLabel(_annonce.Status)</span>
+                </div>
+                <div class="card-body">
+                    @if (_annonce.Status == AnnonceStatus.Pending)
+                    {
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" @onclick="ApproveAnnonce">
+                                <i class="bi bi-check-circle"></i> Approuver
+                            </button>
+                            <button class="btn btn-danger" @onclick="RejectAnnonce">
+                                <i class="bi bi-x-circle"></i> Refuser
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-warning w-100" @onclick="ResetToPending">
+                            <i class="bi bi-arrow-counterclockwise"></i> Remettre en attente
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Seller Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-person"></i> Vendeur</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>@_annonce.User.Name</strong></p>
+                    <p class="mb-1"><i class="bi bi-envelope"></i> @_annonce.User.Email</p>
+                    <p class="mb-1"><i class="bi bi-telephone"></i> @_annonce.User.Phone</p>
+                    <p class="mb-0"><i class="bi bi-geo-alt"></i> @_annonce.User.City</p>
+                </div>
+            </div>
+
+            <!-- Store Estimate -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-shop"></i> Avantage Magasin</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Estimation prix magasin (€)</label>
+                        <input type="number" class="form-control" @bind="_storeEstimate" step="1" />
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="goodDeal" @bind="_isGoodDeal" />
+                        <label class="form-check-label" for="goodDeal">
+                            <i class="bi bi-star-fill text-warning"></i> Bonne affaire
+                        </label>
+                    </div>
+                    
+                    <button class="btn btn-primary w-100" @onclick="SaveEstimate">
+                        <i class="bi bi-save"></i> Enregistrer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Admin Notes -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-sticky"></i> Notes internes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <textarea class="form-control" rows="3" placeholder="Ajouter une note..." @bind="_newNote"></textarea>
+                    </div>
+                    <button class="btn btn-outline-primary w-100 mb-3" @onclick="AddNote" disabled="@string.IsNullOrWhiteSpace(_newNote)">
+                        <i class="bi bi-plus"></i> Ajouter
+                    </button>
+                    
+                    @if (_annonce.AdminNotes.Any())
+                    {
+                        <hr />
+                        @foreach (var note in _annonce.AdminNotes.OrderByDescending(n => n.CreatedAt))
+                        {
+                            <div class="border-start border-3 border-primary ps-3 mb-3">
+                                <p class="mb-1">@note.Note</p>
+                                <small class="text-muted">
+                                    @note.Admin.Name - @note.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                </small>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Annonce? _annonce;
+    private decimal? _storeEstimate;
+    private bool _isGoodDeal;
+    private string _newNote = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnnonce();
+    }
+
+    private async Task LoadAnnonce()
+    {
+        _annonce = await DbContext.Annonces
+            .Include(a => a.User)
+            .Include(a => a.Images)
+            .Include(a => a.AdminNotes)
+                .ThenInclude(n => n.Admin)
+            .FirstOrDefaultAsync(a => a.Id == Id);
+
+        if (_annonce != null)
+        {
+            _storeEstimate = _annonce.StorePriceEstimate;
+            _isGoodDeal = _annonce.IsGoodDeal;
+        }
+    }
+
+    private async Task ApproveAnnonce()
+    {
+        if (_annonce != null)
+        {
+            _annonce.Status = AnnonceStatus.Approved;
+            await DbContext.SaveChangesAsync();
+            await LoadAnnonce();
+        }
+    }
+
+    private async Task RejectAnnonce()
+    {
+        if (_annonce != null)
+        {
+            _annonce.Status = AnnonceStatus.Rejected;
+            await DbContext.SaveChangesAsync();
+            await LoadAnnonce();
+        }
+    }
+
+    private async Task ResetToPending()
+    {
+        if (_annonce != null)
+        {
+            _annonce.Status = AnnonceStatus.Pending;
+            await DbContext.SaveChangesAsync();
+            await LoadAnnonce();
+        }
+    }
+
+    private async Task SaveEstimate()
+    {
+        if (_annonce != null)
+        {
+            _annonce.StorePriceEstimate = _storeEstimate;
+            _annonce.IsGoodDeal = _isGoodDeal;
+            await DbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task AddNote()
+    {
+        if (_annonce != null && !string.IsNullOrWhiteSpace(_newNote))
+        {
+            // For demo, using admin ID 1. In production, get from authenticated user
+            var adminId = await DbContext.Users.Where(u => u.Role == UserRole.Admin).Select(u => u.Id).FirstOrDefaultAsync();
+            if (adminId == 0) adminId = 1;
+            
+            var note = new AdminNote
+            {
+                AnnonceId = _annonce.Id,
+                AdminId = adminId,
+                Note = _newNote,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            DbContext.AdminNotes.Add(note);
+            await DbContext.SaveChangesAsync();
+            
+            _newNote = "";
+            await LoadAnnonce();
+        }
+    }
+
+    private string GetStatusBadgeClass(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.Approved => "bg-success",
+        AnnonceStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusLabel(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.Approved => "Approuvée",
+        AnnonceStatus.Rejected => "Refusée",
+        _ => status.ToString()
+    };
+}

@@ -1,0 +1,182 @@
+@page "/admin/annonces"
+@using MarketplaceApi.Data
+@using MarketplaceApi.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Toutes les annonces - Admin</PageTitle>
+
+<h1 class="mb-4">Toutes les annonces</h1>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Statut</label>
+                <select class="form-select" @onchange="OnStatusChange">
+                    <option value="">Tous</option>
+                    <option value="Pending">En attente</option>
+                    <option value="Approved">Approuvées</option>
+                    <option value="Rejected">Refusées</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Catégorie</label>
+                <select class="form-select" @onchange="OnCategoryChange">
+                    <option value="">Toutes</option>
+                    <option value="Electromenager">Électroménager</option>
+                    <option value="Meubles">Meubles</option>
+                    <option value="Literie">Literie</option>
+                    <option value="Decoration">Décoration</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Bonnes affaires</label>
+                <select class="form-select" @onchange="OnGoodDealChange">
+                    <option value="">Toutes</option>
+                    <option value="true">Oui</option>
+                    <option value="false">Non</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">
+                    <i class="bi bi-x-circle"></i> Réinitialiser
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Titre</th>
+                        <th>Prix</th>
+                        <th>Catégorie</th>
+                        <th>Statut</th>
+                        <th>Vendeur</th>
+                        <th>Bonne affaire</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var annonce in _annonces)
+                    {
+                        <tr>
+                            <td>@annonce.Id</td>
+                            <td>
+                                <span class="d-inline-block text-truncate" style="max-width: 200px;">
+                                    @annonce.Title
+                                </span>
+                            </td>
+                            <td><strong>@annonce.Price.ToString("N0") €</strong></td>
+                            <td>@annonce.Category</td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(annonce.Status)">
+                                    @GetStatusLabel(annonce.Status)
+                                </span>
+                            </td>
+                            <td>@annonce.User.Name</td>
+                            <td>
+                                @if (annonce.IsGoodDeal)
+                                {
+                                    <i class="bi bi-star-fill text-warning"></i>
+                                }
+                            </td>
+                            <td>@annonce.CreatedAt.ToString("dd/MM/yy")</td>
+                            <td>
+                                <a href="/admin/annonces/@annonce.Id" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">@_annonces.Count annonces</small>
+    </div>
+</div>
+
+@code {
+    private List<Annonce> _annonces = new();
+    private AnnonceStatus? _statusFilter;
+    private Category? _categoryFilter;
+    private bool? _goodDealFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnnonces();
+    }
+
+    private async Task LoadAnnonces()
+    {
+        var query = DbContext.Annonces
+            .Include(a => a.User)
+            .AsQueryable();
+
+        if (_statusFilter.HasValue)
+            query = query.Where(a => a.Status == _statusFilter.Value);
+
+        if (_categoryFilter.HasValue)
+            query = query.Where(a => a.Category == _categoryFilter.Value);
+
+        if (_goodDealFilter.HasValue)
+            query = query.Where(a => a.IsGoodDeal == _goodDealFilter.Value);
+
+        _annonces = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task OnStatusChange(ChangeEventArgs e)
+    {
+        _statusFilter = Enum.TryParse<AnnonceStatus>(e.Value?.ToString(), out var status) ? status : null;
+        await LoadAnnonces();
+    }
+
+    private async Task OnCategoryChange(ChangeEventArgs e)
+    {
+        _categoryFilter = Enum.TryParse<Category>(e.Value?.ToString(), out var cat) ? cat : null;
+        await LoadAnnonces();
+    }
+
+    private async Task OnGoodDealChange(ChangeEventArgs e)
+    {
+        _goodDealFilter = bool.TryParse(e.Value?.ToString(), out var gd) ? gd : null;
+        await LoadAnnonces();
+    }
+
+    private async Task ResetFilters()
+    {
+        _statusFilter = null;
+        _categoryFilter = null;
+        _goodDealFilter = null;
+        await LoadAnnonces();
+    }
+
+    private string GetStatusBadgeClass(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.Approved => "bg-success",
+        AnnonceStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusLabel(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.Approved => "Approuvée",
+        AnnonceStatus.Rejected => "Refusée",
+        _ => status.ToString()
+    };
+}
