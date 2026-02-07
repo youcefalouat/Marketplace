@@ -25,27 +25,37 @@ cd marketplace-controlee
 
 ### 2. Configurer la base de données
 
-Modifier le fichier `backend/MarketplaceApi/appsettings.json` :
+L'application utilise Entity Framework Core et créera automatiquement la base de données au premier lancement si elle n'existe pas.
 
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=VOTRE_SERVEUR;Database=MarketplaceDb;User Id=VOTRE_USER;Password=VOTRE_PASSWORD;TrustServerCertificate=True;"
-  }
-}
-```
+#### Option A : SQL Server LocalDB (Windows - Recommandé)
+C'est l'option la plus simple si vous avez installé Visual Studio ou le SDK .NET.
 
-#### Options de base de données :
+1.  Ouvrez `backend/MarketplaceApi/appsettings.json`.
+2.  Assurez-vous que la chaîne de connexion est la suivante :
+    ```json
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=MarketplaceDb;Trusted_Connection=True;TrustServerCertificate=True;"
+    ```
 
-**SQL Server Cloud (Azure SQL) :**
-```
-Server=tcp:votre-serveur.database.windows.net,1433;Database=MarketplaceDb;User Id=admin;Password=VotreMotDePasse;Encrypt=True;TrustServerCertificate=False;
-```
+#### Option B : Docker (Toutes plateformes)
+Si vous avez Docker installé, vous pouvez lancer SQL Server rapidement.
 
-**SQL Server LocalDB (développement) :**
-```
-Server=(localdb)\mssqllocaldb;Database=MarketplaceDb_Dev;Trusted_Connection=True;TrustServerCertificate=True;
-```
+1.  Lancez le conteneur :
+    ```bash
+    docker-compose up -d
+    ```
+2.  Dans `appsettings.json`, utilisez cette chaîne de connexion :
+    ```json
+    "DefaultConnection": "Server=localhost;Database=MarketplaceDb;User Id=sa;Password=YourStrongPassword123!;TrustServerCertificate=True;"
+    ```
+
+#### Option C : SQL Server Express/Instance Locale
+Si vous avez une instance SQL Server complète installée localement :
+
+1.  Utilisez `localhost` ou `.` comme serveur.
+2.  Chaîne de connexion type :
+    ```json
+    "DefaultConnection": "Server=localhost;Database=MarketplaceDb;Integrated Security=True;TrustServerCertificate=True;"
+    ```
 
 ### 3. Configurer le stockage Azure Blob (optionnel)
 

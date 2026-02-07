@@ -141,3 +141,4 @@ C:\Users\youcef.alouat\.gemini\antigravity\scratch\marketplace-controlee\backend
 C:\Users\youcef.alouat\.gemini\antigravity\scratch\marketplace-controlee\backend\MarketplaceApi\obj\Debug\net8.0\MarketplaceApi.pdb
 C:\Users\youcef.alouat\.gemini\antigravity\scratch\marketplace-controlee\backend\MarketplaceApi\obj\Debug\net8.0\MarketplaceApi.genruntimeconfig.cache
 C:\Users\youcef.alouat\.gemini\antigravity\scratch\marketplace-controlee\backend\MarketplaceApi\obj\Debug\net8.0\ref\MarketplaceApi.dll
+C:\Users\youcef.alouat\.gemini\antigravity\scratch\marketplace-controlee\backend\MarketplaceApi\obj\Debug\net8.0\MarketplaceApi.sourcelink.json

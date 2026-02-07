@@ -3,10 +3,21 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 
-class ApiService {
-  // TODO: Update this URL for production
-  static const String baseUrl = 'http://10.0.2.2:5000/api'; // Android emulator
-  // static const String baseUrl = 'http://localhost:5000/api'; // iOS simulator
+  import 'package:flutter/foundation.dart';
+
+  class ApiService {
+  // Automatic detection of the API URL
+  static String get baseUrl {
+    if (kIsWeb) return 'http://localhost:5000/api';
+    
+    // On Android Emulator, 10.0.2.2 points to the host's localhost
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:5000/api';
+    }
+    
+    // For iOS Simulator, Windows, macOS
+    return 'http://localhost:5000/api';
+  }
   
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   String? _token;
