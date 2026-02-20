@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -17,9 +19,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _cityController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // Location state
+  List<Wilaya> _wilayas = [];
+  List<Commune> _communes = [];
+  Wilaya? _selectedWilaya;
+  Commune? _selectedCommune;
+  bool _loadingWilayas = true;
+  bool _loadingCommunes = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWilayas();
+  }
+
+  Future<void> _loadWilayas() async {
+    try {
+      final wilayas = await ApiService().getWilayas();
+      setState(() {
+        _wilayas = wilayas;
+        _loadingWilayas = false;
+      });
+    } catch (e) {
+      setState(() => _loadingWilayas = false);
+    }
+  }
+
+  Future<void> _loadCommunes(int wilayaId) async {
+    setState(() {
+      _loadingCommunes = true;
+      _selectedCommune = null;
+      _communes = [];
+    });
+    try {
+      final communes = await ApiService().getCommunes(wilayaId);
+      setState(() {
+        _communes = communes;
+        _loadingCommunes = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCommunes = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -28,12 +72,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedWilaya == null || _selectedCommune == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner votre wilaya et commune'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.register(
@@ -41,7 +93,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       password: _passwordController.text,
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
-      city: _cityController.text.trim(),
+      wilayaId: _selectedWilaya!.id,
+      communeId: _selectedCommune!.id,
     );
 
     if (success && mounted) {
@@ -72,7 +125,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).primaryColor.withOpacity(0.1),
+              Theme.of(context).primaryColor.withValues(alpha: 0.1),
               Colors.white,
             ],
           ),
@@ -147,24 +200,67 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // City field
-                TextFormField(
-                  controller: _cityController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'Ville',
-                    prefixIcon: const Icon(Icons.location_city_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer votre ville';
-                    }
-                    return null;
-                  },
-                ),
+                // Wilaya dropdown
+                _loadingWilayas
+                    ? const Center(child: CircularProgressIndicator())
+                    : DropdownButtonFormField<Wilaya>(
+                        value: _selectedWilaya,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Wilaya',
+                          prefixIcon: const Icon(Icons.location_city_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: _wilayas
+                            .map((w) => DropdownMenuItem(
+                                  value: w,
+                                  child: Text('${w.code} - ${w.name}'),
+                                ))
+                            .toList(),
+                        onChanged: (wilaya) {
+                          setState(() => _selectedWilaya = wilaya);
+                          if (wilaya != null) _loadCommunes(wilaya.id);
+                        },
+                        validator: (value) {
+                          if (value == null)
+                            return 'Veuillez sélectionner une wilaya';
+                          return null;
+                        },
+                      ),
+                const SizedBox(height: 16),
+
+                // Commune dropdown
+                _loadingCommunes
+                    ? const Center(child: CircularProgressIndicator())
+                    : DropdownButtonFormField<Commune>(
+                        value: _selectedCommune,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Commune',
+                          prefixIcon: const Icon(Icons.location_on_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: _communes
+                            .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c.name),
+                                ))
+                            .toList(),
+                        onChanged: _selectedWilaya == null
+                            ? null
+                            : (commune) {
+                                setState(() => _selectedCommune = commune);
+                              },
+                        validator: (value) {
+                          if (value == null)
+                            return 'Veuillez sélectionner une commune';
+                          return null;
+                        },
+                      ),
                 const SizedBox(height: 16),
 
                 // Password field

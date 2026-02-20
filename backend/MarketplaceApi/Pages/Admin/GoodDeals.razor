@@ -44,13 +44,13 @@
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
                                 <p class="mb-0 text-muted small">Prix demandé</p>
-                                <h5 class="mb-0 text-primary">@annonce.Price.ToString("N0") €</h5>
+                                <h5 class="mb-0 text-primary">@annonce.Price.ToString("N0") DA</h5>
                             </div>
                             @if (annonce.StorePriceEstimate.HasValue)
                             {
                                 <div class="text-end">
                                     <p class="mb-0 text-muted small">Estimation magasin</p>
-                                    <h5 class="mb-0 text-success">@annonce.StorePriceEstimate.Value.ToString("N0") €</h5>
+                                    <h5 class="mb-0 text-success">@annonce.StorePriceEstimate.Value.ToString("N0") DA</h5>
                                 </div>
                             }
                         </div>
@@ -61,14 +61,14 @@
                             var profitPercent = (profit / annonce.Price) * 100;
                             <div class="alert alert-success py-2 mb-2">
                                 <i class="bi bi-graph-up-arrow"></i>
-                                Marge potentielle: <strong>@profit.ToString("N0") € (+@profitPercent.ToString("N0")%)</strong>
+                                Marge potentielle: <strong>@profit.ToString("N0") DA (+@profitPercent.ToString("N0")%)</strong>
                             </div>
                         }
                         
                         <p class="card-text small text-muted">
                             <i class="bi bi-person me-1"></i>@annonce.User.Name<br/>
                             <i class="bi bi-telephone me-1"></i>@annonce.User.Phone<br/>
-                            <i class="bi bi-geo-alt me-1"></i>@annonce.City
+                            <i class="bi bi-geo-alt me-1"></i>@annonce.Wilaya?.Name, @annonce.Commune?.Name
                         </p>
                     </div>
                     
@@ -99,6 +99,8 @@ else
         _annonces = await DbContext.Annonces
             .Include(a => a.User)
             .Include(a => a.Images)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
             .Where(a => a.IsGoodDeal)
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync();

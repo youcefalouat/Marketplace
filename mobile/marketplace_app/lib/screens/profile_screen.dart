@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -14,8 +16,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  late TextEditingController _cityController;
   bool _isEditing = false;
+
+  // Location state
+  List<Wilaya> _wilayas = [];
+  List<Commune> _communes = [];
+  Wilaya? _selectedWilaya;
+  Commune? _selectedCommune;
+  bool _loadingWilayas = true;
+  bool _loadingCommunes = false;
 
   @override
   void initState() {
@@ -23,14 +32,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     _nameController = TextEditingController(text: user?.name ?? '');
     _phoneController = TextEditingController(text: user?.phone ?? '');
-    _cityController = TextEditingController(text: user?.city ?? '');
+    _loadWilayas();
+  }
+
+  Future<void> _loadWilayas() async {
+    try {
+      final wilayas = await ApiService().getWilayas();
+      if (!mounted) return;
+      final user = Provider.of<AuthProvider>(context, listen: false).user;
+      setState(() {
+        _wilayas = wilayas;
+        _loadingWilayas = false;
+        if (user != null) {
+          _selectedWilaya =
+              wilayas.where((w) => w.id == user.wilayaId).firstOrNull;
+          if (_selectedWilaya != null) {
+            _loadCommunes(_selectedWilaya!.id,
+                preselectCommuneId: user.communeId);
+          }
+        }
+      });
+    } catch (e) {
+      setState(() => _loadingWilayas = false);
+    }
+  }
+
+  Future<void> _loadCommunes(int wilayaId, {int? preselectCommuneId}) async {
+    setState(() {
+      _loadingCommunes = true;
+      _selectedCommune = null;
+      _communes = [];
+    });
+    try {
+      final communes = await ApiService().getCommunes(wilayaId);
+      setState(() {
+        _communes = communes;
+        _loadingCommunes = false;
+        if (preselectCommuneId != null) {
+          _selectedCommune =
+              communes.where((c) => c.id == preselectCommuneId).firstOrNull;
+        }
+      });
+    } catch (e) {
+      setState(() => _loadingCommunes = false);
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
@@ -42,19 +93,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final user = Provider.of<AuthProvider>(context, listen: false).user;
         _nameController.text = user?.name ?? '';
         _phoneController.text = user?.phone ?? '';
-        _cityController.text = user?.city ?? '';
+        // Reset location selections
+        if (user != null) {
+          _selectedWilaya =
+              _wilayas.where((w) => w.id == user.wilayaId).firstOrNull;
+          if (_selectedWilaya != null) {
+            _loadCommunes(_selectedWilaya!.id,
+                preselectCommuneId: user.communeId);
+          }
+        }
       }
     });
   }
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedWilaya == null || _selectedCommune == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner une wilaya et une commune'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.updateProfile(
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
-      city: _cityController.text.trim(),
+      wilayaId: _selectedWilaya!.id,
+      communeId: _selectedCommune!.id,
     );
 
     if (mounted) {
@@ -141,7 +210,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Avatar
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                    backgroundColor:
+                        Theme.of(context).primaryColor.withValues(alpha: 0.1),
                     child: Icon(
                       Icons.person,
                       size: 50,
@@ -149,13 +219,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Email (non-editable)
                   Text(
                     user.email,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
                   ),
                   const SizedBox(height: 32),
 
@@ -201,25 +271,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // City field
-                  TextFormField(
-                    controller: _cityController,
-                    enabled: _isEditing,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: 'Ville',
-                      prefixIcon: const Icon(Icons.location_city_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre ville';
-                      }
-                      return null;
-                    },
-                  ),
+                  // Wilaya dropdown
+                  _loadingWilayas
+                      ? const Center(child: CircularProgressIndicator())
+                      : DropdownButtonFormField<Wilaya>(
+                          value: _selectedWilaya,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: 'Wilaya',
+                            prefixIcon:
+                                const Icon(Icons.location_city_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: _wilayas
+                              .map((w) => DropdownMenuItem(
+                                    value: w,
+                                    child: Text('${w.code} - ${w.name}'),
+                                  ))
+                              .toList(),
+                          onChanged: !_isEditing
+                              ? null
+                              : (wilaya) {
+                                  setState(() => _selectedWilaya = wilaya);
+                                  if (wilaya != null) _loadCommunes(wilaya.id);
+                                },
+                        ),
+                  const SizedBox(height: 16),
+
+                  // Commune dropdown
+                  _loadingCommunes
+                      ? const Center(child: CircularProgressIndicator())
+                      : DropdownButtonFormField<Commune>(
+                          value: _selectedCommune,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: 'Commune',
+                            prefixIcon: const Icon(Icons.location_on_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: _communes
+                              .map((c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(c.name),
+                                  ))
+                              .toList(),
+                          onChanged: !_isEditing || _selectedWilaya == null
+                              ? null
+                              : (commune) {
+                                  setState(() => _selectedCommune = commune);
+                                },
+                        ),
                   const SizedBox(height: 32),
 
                   // Save or Logout button
@@ -235,7 +340,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         child: auth.isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
                             : const Text('Enregistrer'),
                       ),
                     )

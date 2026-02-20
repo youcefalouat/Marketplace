@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../services/api_service.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
 import 'annonce_detail_screen.dart';
@@ -46,13 +47,12 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     if (confirmed == true && mounted) {
       final provider = Provider.of<AnnoncesProvider>(context, listen: false);
       final success = await provider.deleteAnnonce(annonce.id);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success 
-                ? 'Annonce supprimée' 
-                : provider.error ?? 'Erreur'),
+            content: Text(
+                success ? 'Annonce supprimée' : provider.error ?? 'Erreur'),
             backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
@@ -134,7 +134,8 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.list_alt_outlined, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.list_alt_outlined,
+                      size: 64, color: Colors.grey[400]),
                   const SizedBox(height: 16),
                   Text(
                     'Vous n\'avez pas encore d\'annonces',
@@ -172,11 +173,11 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
       child: InkWell(
         onTap: annonce.status.toLowerCase() == 'approved'
             ? () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
-                ),
-              )
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
+                  ),
+                )
             : null,
         child: Row(
           children: [
@@ -186,7 +187,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               height: 100,
               child: annonce.mainImageUrl != null
                   ? CachedNetworkImage(
-                      imageUrl: annonce.mainImageUrl!,
+                      imageUrl: ApiService.getImageUrl(annonce.mainImageUrl)!,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
                         color: Colors.grey[200],
@@ -202,7 +203,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                       child: const Icon(Icons.image, color: Colors.grey),
                     ),
             ),
-            
+
             // Info
             Expanded(
               child: Padding(
@@ -261,7 +262,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                 ),
               ),
             ),
-            
+
             // Delete button
             IconButton(
               icon: const Icon(Icons.delete_outline),

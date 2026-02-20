@@ -9,6 +9,8 @@ import 'create_annonce_screen.dart';
 import 'my_annonces_screen.dart';
 import 'profile_screen.dart';
 import 'login_screen.dart';
+import 'conversation_list_screen.dart';
+import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,8 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _loadAnnonces() {
-    final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-    provider.loadAnnonces(refresh: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = Provider.of<AnnoncesProvider>(context, listen: false);
+      provider.loadAnnonces(refresh: true);
+    });
   }
 
   void _onScroll() {
@@ -204,9 +208,10 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (index) {
           if (index == _currentIndex) return;
-          
-          final authProvider = Provider.of<AuthProvider>(context, listen: false);
-          
+
+          final authProvider =
+              Provider.of<AuthProvider>(context, listen: false);
+
           if (index > 0 && !authProvider.isAuthenticated) {
             Navigator.push(
               context,
@@ -223,9 +228,14 @@ class _HomeScreenState extends State<HomeScreen> {
           } else if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const MyAnnoncesScreen()),
+              MaterialPageRoute(builder: (_) => const ConversationListScreen()),
             );
           } else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyAnnoncesScreen()),
+            );
+          } else if (index == 4) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileScreen()),
@@ -245,6 +255,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.add_circle_outline),
             activeIcon: Icon(Icons.add_circle),
             label: 'Publier',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.message_outlined),
+            activeIcon: Icon(Icons.message),
+            label: 'Messages',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt_outlined),
@@ -356,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
               flex: 3,
               child: annonce.mainImageUrl != null
                   ? CachedNetworkImage(
-                      imageUrl: annonce.mainImageUrl!,
+                      imageUrl: ApiService.getImageUrl(annonce.mainImageUrl)!,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       placeholder: (context, url) => Container(
@@ -396,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      '${annonce.price.toStringAsFixed(0)} €',
+                      '${annonce.price.toStringAsFixed(0)} DA',
                       style: TextStyle(
                         color: Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
@@ -414,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 2),
                         Expanded(
                           child: Text(
-                            annonce.city,
+                            annonce.wilayaName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

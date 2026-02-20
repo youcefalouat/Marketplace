@@ -90,7 +90,10 @@ public class AdminAnnoncesController : ControllerBase
     public async Task<ActionResult<AdminAnnonceDetailDto>> GetAnnonceDetail(int id)
     {
         var annonce = await _context.Annonces
-            .Include(a => a.User)
+            .Include(a => a.User).ThenInclude(u => u.Wilaya)
+            .Include(a => a.User).ThenInclude(u => u.Commune)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
             .Include(a => a.Images)
             .Include(a => a.AdminNotes)
                 .ThenInclude(n => n.Admin)
@@ -110,7 +113,11 @@ public class AdminAnnoncesController : ControllerBase
             Category = annonce.Category.ToString(),
             State = annonce.State.ToString(),
             Phone = annonce.Phone,
-            City = annonce.City,
+            WilayaId = annonce.WilayaId,
+            CommuneId = annonce.CommuneId,
+            WilayaName = annonce.Wilaya.Name,
+            CommuneName = annonce.Commune.Name,
+            IsExchange = annonce.IsExchange,
             Status = annonce.Status.ToString(),
             CreatedAt = annonce.CreatedAt,
             ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
@@ -118,7 +125,8 @@ public class AdminAnnoncesController : ControllerBase
             {
                 Name = annonce.User.Name,
                 Phone = annonce.User.Phone,
-                City = annonce.User.City
+                WilayaName = annonce.User.Wilaya.Name,
+                CommuneName = annonce.User.Commune.Name
             },
             IsGoodDeal = annonce.IsGoodDeal,
             StorePriceEstimate = annonce.StorePriceEstimate,

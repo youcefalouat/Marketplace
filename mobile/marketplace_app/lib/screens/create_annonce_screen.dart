@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/annonces_provider.dart';
+import '../services/api_service.dart';
 
 class CreateAnnonceScreen extends StatefulWidget {
   const CreateAnnonceScreen({super.key});
@@ -18,12 +20,21 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _cityController = TextEditingController();
-  
+
   int _selectedCategory = 0;
   int _selectedState = 0;
+  bool _isExchange = false;
+  bool _showPhone = true;
   final List<File> _images = [];
   final ImagePicker _picker = ImagePicker();
+
+  // Location state
+  List<Wilaya> _wilayas = [];
+  List<Commune> _communes = [];
+  Wilaya? _selectedWilaya;
+  Commune? _selectedCommune;
+  bool _loadingWilayas = true;
+  bool _loadingCommunes = false;
 
   final List<String> _categories = [
     'Électroménager',
@@ -37,14 +48,58 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   @override
   void initState() {
     super.initState();
+    _loadWilayas();
     _prefillUserData();
+  }
+
+  Future<void> _loadWilayas() async {
+    try {
+      final wilayas = await ApiService().getWilayas();
+      if (!mounted) return;
+      final user = Provider.of<AuthProvider>(context, listen: false).user;
+      setState(() {
+        _wilayas = wilayas;
+        _loadingWilayas = false;
+        // Pre-select user's wilaya
+        if (user != null) {
+          _selectedWilaya =
+              wilayas.where((w) => w.id == user.wilayaId).firstOrNull;
+          if (_selectedWilaya != null) {
+            _loadCommunes(_selectedWilaya!.id,
+                preselectCommuneId: user.communeId);
+          }
+        }
+      });
+    } catch (e) {
+      setState(() => _loadingWilayas = false);
+    }
+  }
+
+  Future<void> _loadCommunes(int wilayaId, {int? preselectCommuneId}) async {
+    setState(() {
+      _loadingCommunes = true;
+      _selectedCommune = null;
+      _communes = [];
+    });
+    try {
+      final communes = await ApiService().getCommunes(wilayaId);
+      setState(() {
+        _communes = communes;
+        _loadingCommunes = false;
+        if (preselectCommuneId != null) {
+          _selectedCommune =
+              communes.where((c) => c.id == preselectCommuneId).firstOrNull;
+        }
+      });
+    } catch (e) {
+      setState(() => _loadingCommunes = false);
+    }
   }
 
   void _prefillUserData() {
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     if (user != null) {
       _phoneController.text = user.phone;
-      _cityController.text = user.city;
     }
   }
 
@@ -54,11 +109,14 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
     _descriptionController.dispose();
     _priceController.dispose();
     _phoneController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
+  bool _isPickingImage = false;
+
   Future<void> _pickImages() async {
+    if (_isPickingImage) return;
+
     if (_images.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Maximum 5 photos autorisées')),
@@ -66,23 +124,31 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       return;
     }
 
-    final pickedFiles = await _picker.pickMultiImage(
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 85,
-    );
+    setState(() => _isPickingImage = true);
 
-    if (pickedFiles.isNotEmpty) {
-      final remainingSlots = 5 - _images.length;
-      final filesToAdd = pickedFiles.take(remainingSlots).toList();
-      
-      setState(() {
-        _images.addAll(filesToAdd.map((xFile) => File(xFile.path)));
-      });
+    try {
+      final pickedFiles = await _picker.pickMultiImage(
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+
+      if (pickedFiles.isNotEmpty) {
+        final remainingSlots = 5 - _images.length;
+        final filesToAdd = pickedFiles.take(remainingSlots).toList();
+
+        setState(() {
+          _images.addAll(filesToAdd.map((xFile) => File(xFile.path)));
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
   }
 
   Future<void> _takePhoto() async {
+    if (_isPickingImage) return;
+
     if (_images.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Maximum 5 photos autorisées')),
@@ -90,17 +156,23 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       return;
     }
 
-    final pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 85,
-    );
+    setState(() => _isPickingImage = true);
 
-    if (pickedFile != null) {
-      setState(() {
-        _images.add(File(pickedFile.path));
-      });
+    try {
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _images.add(File(pickedFile.path));
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
   }
 
@@ -124,7 +196,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
     }
 
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-    
+
     final success = await provider.createAnnonce(
       category: _selectedCategory,
       title: _titleController.text.trim(),
@@ -132,7 +204,10 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       price: double.parse(_priceController.text),
       state: _selectedState,
       phone: _phoneController.text.trim(),
-      city: _cityController.text.trim(),
+      wilayaId: _selectedWilaya?.id,
+      communeId: _selectedCommune?.id,
+      isExchange: _isExchange,
+      showPhone: _showPhone,
       imagePaths: _images.map((f) => f.path).toList(),
     );
 
@@ -171,8 +246,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             Text(
               'Photos (${_images.length}/5)',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             _buildPhotosSection(),
@@ -182,8 +257,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             Text(
               'Catégorie',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -204,8 +279,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             Text(
               'État',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -273,8 +348,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               controller: _priceController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Prix (€)',
-                prefixIcon: const Icon(Icons.euro),
+                labelText: 'Prix (DA)',
+                prefixIcon: const Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -289,6 +364,17 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+
+            // IsExchange toggle
+            SwitchListTile(
+              title: const Text('Échange possible'),
+              subtitle:
+                  const Text('L\'article peut être échangé contre un autre'),
+              value: _isExchange,
+              onChanged: (value) => setState(() => _isExchange = value),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             ),
             const SizedBox(height: 16),
 
@@ -310,26 +396,70 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                 return null;
               },
             ),
+            const SizedBox(height: 8),
+
+            // Show Phone toggle
+            SwitchListTile(
+              title: const Text('Afficher mon numéro'),
+              subtitle: const Text(
+                  'Si désactivé, les utilisateurs ne pourront pas vous appeler directement'),
+              value: _showPhone,
+              onChanged: (value) => setState(() => _showPhone = value),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
             const SizedBox(height: 16),
 
-            // City
-            TextFormField(
-              controller: _cityController,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: 'Ville',
-                prefixIcon: const Icon(Icons.location_city),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Veuillez entrer une ville';
-                }
-                return null;
-              },
-            ),
+            // Wilaya dropdown
+            _loadingWilayas
+                ? const Center(child: CircularProgressIndicator())
+                : DropdownButtonFormField<Wilaya>(
+                    value: _selectedWilaya,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Wilaya',
+                      prefixIcon: const Icon(Icons.location_city),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _wilayas
+                        .map((w) => DropdownMenuItem(
+                              value: w,
+                              child: Text('${w.code} - ${w.name}'),
+                            ))
+                        .toList(),
+                    onChanged: (wilaya) {
+                      setState(() => _selectedWilaya = wilaya);
+                      if (wilaya != null) _loadCommunes(wilaya.id);
+                    },
+                  ),
+            const SizedBox(height: 16),
+
+            // Commune dropdown
+            _loadingCommunes
+                ? const Center(child: CircularProgressIndicator())
+                : DropdownButtonFormField<Commune>(
+                    value: _selectedCommune,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Commune',
+                      prefixIcon: const Icon(Icons.location_on),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _communes
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c.name),
+                            ))
+                        .toList(),
+                    onChanged: _selectedWilaya == null
+                        ? null
+                        : (commune) {
+                            setState(() => _selectedCommune = commune);
+                          },
+                  ),
             const SizedBox(height: 32),
 
             // Submit button

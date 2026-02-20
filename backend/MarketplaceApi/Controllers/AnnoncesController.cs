@@ -30,6 +30,8 @@ public class AnnoncesController : ControllerBase
     {
         var query = _context.Annonces
             .Include(a => a.Images)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
             .Where(a => a.Status == AnnonceStatus.Approved)
             .AsQueryable();
         
@@ -49,9 +51,14 @@ public class AnnoncesController : ControllerBase
             query = query.Where(a => a.Price <= filter.MaxPrice.Value);
         }
         
-        if (!string.IsNullOrWhiteSpace(filter.City))
+        if (filter.WilayaId.HasValue)
         {
-            query = query.Where(a => a.City.Contains(filter.City));
+            query = query.Where(a => a.WilayaId == filter.WilayaId.Value);
+        }
+        
+        if (filter.CommuneId.HasValue)
+        {
+            query = query.Where(a => a.CommuneId == filter.CommuneId.Value);
         }
         
         var totalCount = await query.CountAsync();
@@ -65,9 +72,11 @@ public class AnnoncesController : ControllerBase
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
-                City = a.City,
+                WilayaName = a.Wilaya.Name,
+                CommuneName = a.Commune.Name,
                 Category = a.Category.ToString(),
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                IsExchange = a.IsExchange,
                 CreatedAt = a.CreatedAt
             })
             .ToListAsync();
@@ -89,7 +98,10 @@ public class AnnoncesController : ControllerBase
     {
         var annonce = await _context.Annonces
             .Include(a => a.Images)
-            .Include(a => a.User)
+            .Include(a => a.User).ThenInclude(u => u.Wilaya)
+            .Include(a => a.User).ThenInclude(u => u.Commune)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
             .FirstOrDefaultAsync(a => a.Id == id && a.Status == AnnonceStatus.Approved);
         
         if (annonce == null)
@@ -108,7 +120,10 @@ public class AnnoncesController : ControllerBase
     public async Task<ActionResult<AnnonceDetailDto>> CreateAnnonce([FromForm] CreateAnnonceDto dto, [FromForm] List<IFormFile>? images)
     {
         var userId = GetCurrentUserId();
-        var user = await _context.Users.FindAsync(userId);
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId);
         
         if (user == null)
         {
@@ -121,6 +136,20 @@ public class AnnoncesController : ControllerBase
             return BadRequest(new { message = "Maximum 5 images autorisées" });
         }
         
+        var wilayaId = dto.WilayaId ?? user.WilayaId;
+        var communeId = dto.CommuneId ?? user.CommuneId;
+        
+        // Validate wilaya/commune if provided
+        if (dto.WilayaId.HasValue || dto.CommuneId.HasValue)
+        {
+            var commune = await _context.Communes.FirstOrDefaultAsync(
+                c => c.Id == communeId && c.WilayaId == wilayaId);
+            if (commune == null)
+            {
+                return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+            }
+        }
+        
         var annonce = new Annonce
         {
             UserId = userId,
@@ -130,7 +159,10 @@ public class AnnoncesController : ControllerBase
             Category = dto.Category,
             State = dto.State,
             Phone = dto.Phone ?? user.Phone,
-            City = dto.City ?? user.City,
+            WilayaId = wilayaId,
+            CommuneId = communeId,
+            IsExchange = dto.IsExchange,
+            ShowPhone = dto.ShowPhone,
             Status = AnnonceStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -156,10 +188,13 @@ public class AnnoncesController : ControllerBase
             await _context.SaveChangesAsync();
         }
         
-        // Reload with images
+        // Reload with all navigation properties
         annonce = await _context.Annonces
             .Include(a => a.Images)
-            .Include(a => a.User)
+            .Include(a => a.User).ThenInclude(u => u.Wilaya)
+            .Include(a => a.User).ThenInclude(u => u.Commune)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
             .FirstAsync(a => a.Id == annonce.Id);
         
         return CreatedAtAction(nameof(GetAnnonce), new { id = annonce.Id }, MapToDetailDto(annonce));
@@ -238,7 +273,7 @@ public class AnnoncesController : ControllerBase
     
     private static AnnonceDetailDto MapToDetailDto(Annonce annonce)
     {
-        return new AnnonceDetailDto
+        var dto = new AnnonceDetailDto
         {
             Id = annonce.Id,
             Title = annonce.Title,
@@ -246,17 +281,25 @@ public class AnnoncesController : ControllerBase
             Price = annonce.Price,
             Category = annonce.Category.ToString(),
             State = annonce.State.ToString(),
-            Phone = annonce.Phone,
-            City = annonce.City,
+            Phone = annonce.ShowPhone ? annonce.Phone : string.Empty,
+            ShowPhone = annonce.ShowPhone,
+            WilayaId = annonce.WilayaId,
+            CommuneId = annonce.CommuneId,
+            WilayaName = annonce.Wilaya.Name,
+            CommuneName = annonce.Commune.Name,
+            IsExchange = annonce.IsExchange,
             Status = annonce.Status.ToString(),
             CreatedAt = annonce.CreatedAt,
             ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
             Seller = new SellerInfoDto
             {
                 Name = annonce.User.Name,
-                Phone = annonce.User.Phone,
-                City = annonce.User.City
+                Phone = annonce.ShowPhone ? annonce.User.Phone : string.Empty,
+                WilayaName = annonce.User.Wilaya.Name,
+                CommuneName = annonce.User.Commune.Name
             }
         };
+        
+        return dto;
     }
 }

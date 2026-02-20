@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 
 // Add Blazor Server for Admin
 builder.Services.AddRazorComponents()
@@ -100,6 +101,15 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
+// Force en-US culture for consistent number parsing (decimal points)
+var supportedCultures = new[] { "en-US" };
+var localizationOptions = new RequestLocalizationOptions()
+    .SetDefaultCulture(supportedCultures[0])
+    .AddSupportedCultures(supportedCultures)
+    .AddSupportedUICultures(supportedCultures);
+
+app.UseRequestLocalization(localizationOptions);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -116,6 +126,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<MarketplaceApi.Hubs.ChatHub>("/chatHub");
 
 // Map Blazor Admin routes
 app.MapRazorComponents<App>()
@@ -128,16 +139,24 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.EnsureCreated();
     
+    // Seed wilayas and communes
+    LocationSeedData.SeedLocations(db);
+    
     // Seed admin user if not exists
     if (!db.Users.Any(u => u.Role == MarketplaceApi.Models.UserRole.Admin))
     {
+        // Use Alger (wilaya 16) and Alger Centre (commune 1 of Alger) as default
+        var algerWilaya = db.Wilayas.FirstOrDefault(w => w.Code == "16");
+        var algerCommune = db.Communes.FirstOrDefault(c => c.WilayaId == algerWilaya!.Id);
+        
         db.Users.Add(new MarketplaceApi.Models.User
         {
             Email = "admin@marketplace.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
             Name = "Administrateur",
             Phone = "0600000000",
-            City = "Paris",
+            WilayaId = algerWilaya!.Id,
+            CommuneId = algerCommune!.Id,
             Role = MarketplaceApi.Models.UserRole.Admin,
             CreatedAt = DateTime.UtcNow
         });

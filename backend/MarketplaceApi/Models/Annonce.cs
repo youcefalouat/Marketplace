@@ -34,8 +34,14 @@ public class Annonce
     public string Phone { get; set; } = string.Empty;
     
     [Required]
-    [MaxLength(100)]
-    public string City { get; set; } = string.Empty;
+    public int WilayaId { get; set; }
+    
+    [Required]
+    public int CommuneId { get; set; }
+    
+    public bool IsExchange { get; set; } = false;
+    
+    public bool ShowPhone { get; set; } = true;
     
     public AnnonceStatus Status { get; set; } = AnnonceStatus.Pending;
     
@@ -49,6 +55,8 @@ public class Annonce
     
     // Navigation properties
     public User User { get; set; } = null!;
+    public Wilaya Wilaya { get; set; } = null!;
+    public Commune Commune { get; set; } = null!;
     public ICollection<AnnonceImage> Images { get; set; } = new List<AnnonceImage>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
 }

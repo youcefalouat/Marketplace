@@ -30,6 +30,7 @@ venv/
 # Mobile
 *.apk
 *.ipa
+*.zip
 .gradle/
 android/.gradle/
 ios/Pods/

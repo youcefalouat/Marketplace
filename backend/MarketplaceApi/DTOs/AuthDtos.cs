@@ -22,8 +22,10 @@ public class RegisterDto
     public string Phone { get; set; } = string.Empty;
     
     [Required]
-    [MaxLength(100)]
-    public string City { get; set; } = string.Empty;
+    public int WilayaId { get; set; }
+    
+    [Required]
+    public int CommuneId { get; set; }
 }
 
 public class LoginDto
@@ -34,6 +36,15 @@ public class LoginDto
     
     [Required]
     public string Password { get; set; } = string.Empty;
+}
+
+public class SocialLoginDto
+{
+    [Required]
+    public string Provider { get; set; } = string.Empty; // "Google" or "Facebook"
+    
+    [Required]
+    public string AccessToken { get; set; } = string.Empty;
 }
 
 public class AuthResponseDto
@@ -49,7 +60,10 @@ public class UserDto
     public string Email { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
-    public string City { get; set; } = string.Empty;
+    public int WilayaId { get; set; }
+    public int CommuneId { get; set; }
+    public string WilayaName { get; set; } = string.Empty;
+    public string CommuneName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
 }
 
@@ -64,6 +78,8 @@ public class UpdateProfileDto
     public string Phone { get; set; } = string.Empty;
     
     [Required]
-    [MaxLength(100)]
-    public string City { get; set; } = string.Empty;
+    public int WilayaId { get; set; }
+    
+    [Required]
+    public int CommuneId { get; set; }
 }

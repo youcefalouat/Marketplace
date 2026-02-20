@@ -14,6 +14,7 @@ dependencies:
 
   # HTTP & API
   http: ^1.1.0
+  signalr_netcore: ^1.1.4
   
   # State Management
   provider: ^6.1.1
@@ -35,6 +36,8 @@ dependencies:
   
   # Form Validation
   intl: ^0.18.1
+
+  
 
 dev_dependencies:
   flutter_test:

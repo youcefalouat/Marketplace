@@ -27,7 +27,11 @@ public class UsersController : ControllerBase
     {
         var userId = GetCurrentUserId();
         
-        var user = await _context.Users.FindAsync(userId);
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+        
         if (user == null)
         {
             return NotFound();
@@ -39,7 +43,10 @@ public class UsersController : ControllerBase
             Email = user.Email,
             Name = user.Name,
             Phone = user.Phone,
-            City = user.City,
+            WilayaId = user.WilayaId,
+            CommuneId = user.CommuneId,
+            WilayaName = user.Wilaya.Name,
+            CommuneName = user.Commune.Name,
             Role = user.Role.ToString()
         });
     }
@@ -58,9 +65,24 @@ public class UsersController : ControllerBase
             return NotFound();
         }
         
+        // Validate wilaya and commune
+        var wilaya = await _context.Wilayas.FindAsync(dto.WilayaId);
+        if (wilaya == null)
+        {
+            return BadRequest(new { message = "Wilaya invalide" });
+        }
+        
+        var commune = await _context.Communes.FirstOrDefaultAsync(
+            c => c.Id == dto.CommuneId && c.WilayaId == dto.WilayaId);
+        if (commune == null)
+        {
+            return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+        }
+        
         user.Name = dto.Name;
         user.Phone = dto.Phone;
-        user.City = dto.City;
+        user.WilayaId = dto.WilayaId;
+        user.CommuneId = dto.CommuneId;
         
         await _context.SaveChangesAsync();
         
@@ -70,7 +92,10 @@ public class UsersController : ControllerBase
             Email = user.Email,
             Name = user.Name,
             Phone = user.Phone,
-            City = user.City,
+            WilayaId = user.WilayaId,
+            CommuneId = user.CommuneId,
+            WilayaName = wilaya.Name,
+            CommuneName = commune.Name,
             Role = user.Role.ToString()
         });
     }

@@ -14,16 +14,45 @@ public class ApplicationDbContext : DbContext
     public DbSet<Annonce> Annonces { get; set; }
     public DbSet<AnnonceImage> AnnonceImages { get; set; }
     public DbSet<AdminNote> AdminNotes { get; set; }
+    public DbSet<Wilaya> Wilayas { get; set; }
+    public DbSet<Commune> Communes { get; set; }
+    public DbSet<Conversation> Conversations { get; set; }
+    public DbSet<Message> Messages { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        
+        // Wilaya configuration
+        modelBuilder.Entity<Wilaya>(entity =>
+        {
+            entity.HasIndex(e => e.Code).IsUnique();
+        });
+        
+        // Commune configuration
+        modelBuilder.Entity<Commune>(entity =>
+        {
+            entity.HasOne(c => c.Wilaya)
+                .WithMany(w => w.Communes)
+                .HasForeignKey(c => c.WilayaId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
         
         // User configuration
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(e => e.Email).IsUnique();
             entity.Property(e => e.Role).HasConversion<int>();
+            
+            entity.HasOne(u => u.Wilaya)
+                .WithMany()
+                .HasForeignKey(u => u.WilayaId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.HasOne(u => u.Commune)
+                .WithMany()
+                .HasForeignKey(u => u.CommuneId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
         
         // Annonce configuration
@@ -37,6 +66,16 @@ public class ApplicationDbContext : DbContext
                 .WithMany(u => u.Annonces)
                 .HasForeignKey(a => a.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            
+            entity.HasOne(a => a.Wilaya)
+                .WithMany()
+                .HasForeignKey(a => a.WilayaId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.HasOne(a => a.Commune)
+                .WithMany()
+                .HasForeignKey(a => a.CommuneId)
+                .OnDelete(DeleteBehavior.Restrict);
             
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.Category);
@@ -63,6 +102,39 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(n => n.Admin)
                 .WithMany(u => u.AdminNotes)
                 .HasForeignKey(n => n.AdminId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Conversation configuration
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.HasOne(c => c.Annonce)
+                .WithMany()
+                .HasForeignKey(c => c.AnnonceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.Buyer)
+                .WithMany()
+                .HasForeignKey(c => c.BuyerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(c => c.Seller)
+                .WithMany()
+                .HasForeignKey(c => c.SellerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Message configuration
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

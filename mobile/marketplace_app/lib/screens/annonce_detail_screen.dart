@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/api_service.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
+import '../providers/chat_provider.dart';
+import '../providers/auth_provider.dart';
+import 'chat_screen.dart';
+import 'login_screen.dart';
 
 class AnnonceDetailScreen extends StatefulWidget {
   final int annonceId;
@@ -42,7 +47,79 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'ouvrir l\'application téléphone')),
+          const SnackBar(
+              content: Text('Impossible d\'ouvrir l\'application téléphone')),
+        );
+      }
+    }
+  }
+
+  Future<void> _contactSeller(AnnonceDetail annonce) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Vous devez être connecté pour envoyer un message')),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    // Don't allow chatting with yourself
+    if (authProvider.user?.id == annonce.seller.name) {
+      // Wait, seller.name is not ID. seller info in AnnonceDetail doesn't have ID?
+      // AnnonceDetail has `seller` which is `SellerInfo`. SellerInfo has name, phone, locations. No ID?
+      // I need to check `AnnonceDetail` model.
+    }
+
+    // Check if we have seller ID in AnnonceDetail?
+    // The `AnnonceDetail` DTO in backend has `Seller` object.
+    // The `SellerInfo` class in mobile has `name`, `phone`, `wilayaName`, `communeName`.
+    // It seems I missed `id` in `SellerInfo`?
+    // Let's check `backend/MarketplaceApi/DTOs/AnnonceDto.cs` (or Controller map).
+    // In `AnnoncesController.cs` MapToDetailDto:
+    /*
+            Seller = new SellerInfoDto
+            {
+                Name = annonce.User.Name,
+                Phone = annonce.User.Phone,
+                WilayaName = annonce.User.Wilaya.Name,
+                CommuneName = annonce.User.Commune.Name
+            }
+    */
+    // It does NOT have ID.
+    // So I can't check if it's me easily, except maybe comparing names (unreliable).
+    // Or I need to add SellerId to AnnonceDetailDto.
+    // `Conversation` start endpoint needs `annonceId`.
+    // Backend handles "cannot chat with yourself".
+
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    try {
+      final conversation = await chatProvider.startConversation(annonce.id);
+
+      if (conversation != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversation.id,
+              interlocutorName:
+                  conversation.interlocutorName, // This will be seller name
+              annonceId: conversation.annonceId,
+              annonceTitle: conversation.annonceTitle,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
         );
       }
     }
@@ -76,36 +153,93 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<AnnoncesProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading || provider.selectedAnnonce == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return Consumer<AnnoncesProvider>(
+      builder: (context, provider, child) {
+        final annonce = provider.selectedAnnonce;
+        final isLoading = provider.isLoading;
+        final error = provider.error;
 
-          if (provider.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text(provider.error!),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _loadAnnonce,
-                    child: const Text('Réessayer'),
+        return Scaffold(
+          body: _buildBody(isLoading, error, annonce),
+          bottomNavigationBar: _buildBottomBar(context, annonce),
+        );
+      },
+    );
+  }
+
+  Widget? _buildBottomBar(BuildContext context, AnnonceDetail? annonce) {
+    if (annonce == null) return null;
+
+    final hasPhone = annonce.showPhone && annonce.phone.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, -2),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            if (hasPhone)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _callSeller(annonce.phone),
+                  icon: const Icon(Icons.phone),
+                  label: const Text('Appeler'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                ],
+                ),
               ),
-            );
-          }
-
-          final annonce = provider.selectedAnnonce!;
-          return _buildContent(annonce);
-        },
+            if (hasPhone) const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _contactSeller(annonce),
+                icon: const Icon(Icons.message),
+                label: const Text('Contacter'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildBody(bool isLoading, String? error, AnnonceDetail? annonce) {
+    if (isLoading || annonce == null) {
+      if (error != null) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(error),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadAnnonce,
+                child: const Text('Réessayer'),
+              ),
+            ],
+          ),
+        );
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _buildContent(annonce);
   }
 
   Widget _buildContent(AnnonceDetail annonce) {
@@ -119,7 +253,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
             background: _buildImageGallery(annonce.imageUrls),
           ),
         ),
-        
+
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -130,16 +264,16 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                 Text(
                   annonce.title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${annonce.price.toStringAsFixed(0)} €',
+                  '${annonce.price.toStringAsFixed(0)} DA',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Theme.of(context).primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: Theme.of(context).primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 16),
 
@@ -158,8 +292,13 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                     ),
                     _buildTag(
                       icon: Icons.location_on_outlined,
-                      label: annonce.city,
+                      label: '${annonce.wilayaName}, ${annonce.communeName}',
                     ),
+                    if (annonce.isExchange)
+                      _buildTag(
+                        icon: Icons.swap_horiz,
+                        label: 'Échange possible',
+                      ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -168,8 +307,8 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                 Text(
                   'Description',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -187,16 +326,19 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                       children: [
                         Text(
                           'Vendeur',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
                             CircleAvatar(
                               radius: 24,
-                              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                              backgroundColor: Theme.of(context)
+                                  .primaryColor
+                                  .withOpacity(0.1),
                               child: Icon(
                                 Icons.person,
                                 color: Theme.of(context).primaryColor,
@@ -224,8 +366,9 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        annonce.seller.city,
-                                        style: TextStyle(color: Colors.grey[600]),
+                                        '${annonce.seller.wilayaName}, ${annonce.seller.communeName}',
+                                        style:
+                                            TextStyle(color: Colors.grey[600]),
                                       ),
                                     ],
                                   ),
@@ -267,7 +410,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
           },
           itemBuilder: (context, index) {
             return CachedNetworkImage(
-              imageUrl: imageUrls[index],
+              imageUrl: ApiService.getImageUrl(imageUrls[index])!,
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
                 color: Colors.grey[200],

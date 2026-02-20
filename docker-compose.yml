@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 services:
   sql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -12,3 +13,35 @@ services:
 
 volumes:
   mssql-data:
+=======
+version: '3.4'
+
+services:
+  marketplace-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: marketplace-db
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+  marketplace-api:
+    image: marketplace-api
+    container_name: marketplace-api
+    build:
+      context: ./backend/MarketplaceApi
+      dockerfile: Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=marketplace-db;Database=MarketplaceDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
+      - ASPNETCORE_URLS=http://+:8080
+    ports:
+      - "5000:8080"
+    depends_on:
+      - marketplace-db
+
+volumes:
+  sqlserver_data:
+>>>>>>> b0e10a4 (feat: Initialize marketplace application with .NET backend, Flutter multi-platform frontend, database migrations, and chat functionality.)
