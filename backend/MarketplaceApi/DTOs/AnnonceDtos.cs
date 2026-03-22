@@ -7,7 +7,7 @@ namespace MarketplaceApi.DTOs;
 public class CreateAnnonceDto
 {
     [Required]
-    public Category Category { get; set; }
+    public int CategoryId { get; set; }
     
     [Required]
     [MaxLength(200)]
@@ -47,6 +47,9 @@ public class AnnonceListDto
     public string Category { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
     public bool IsExchange { get; set; }
+    public bool IsGoodDeal { get; set; }
+    public double? SellerAverageRating { get; set; }
+    public int? SellerRatingCount { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -66,6 +69,7 @@ public class AnnonceDetailDto
     public string CommuneName { get; set; } = string.Empty;
     public bool IsExchange { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool IsGoodDeal { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<string> ImageUrls { get; set; } = new();
     public SellerInfoDto Seller { get; set; } = null!;
@@ -73,10 +77,13 @@ public class AnnonceDetailDto
 
 public class SellerInfoDto
 {
+    public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string WilayaName { get; set; } = string.Empty;
     public string CommuneName { get; set; } = string.Empty;
+    public double? AverageRating { get; set; }
+    public int? RatingCount { get; set; }
 }
 
 public class MyAnnonceDto
@@ -87,6 +94,8 @@ public class MyAnnonceDto
     public string Category { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
+    public bool IsGoodDeal { get; set; }
+    public int? ModerationThreadId { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -107,7 +116,6 @@ public class AdminAnnonceListDto
 
 public class AdminAnnonceDetailDto : AnnonceDetailDto
 {
-    public bool IsGoodDeal { get; set; }
     public decimal? StorePriceEstimate { get; set; }
     public List<AdminNoteDto> AdminNotes { get; set; } = new();
 }
@@ -136,11 +144,12 @@ public class UpdateStoreEstimateDto
 // Filter DTOs
 public class AnnonceFilterDto
 {
-    public Category? Category { get; set; }
+    public int? CategoryId { get; set; }
+    public string? Search { get; set; }
     public decimal? MinPrice { get; set; }
     public decimal? MaxPrice { get; set; }
-    public int? WilayaId { get; set; }
-    public int? CommuneId { get; set; }
+    public List<int>? WilayaIds { get; set; }
+    public List<int>? CommuneIds { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

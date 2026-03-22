@@ -6,13 +6,7 @@ public enum UserRole
     Admin = 1
 }
 
-public enum Category
-{
-    Electromenager = 0,
-    Meubles = 1,
-    Literie = 2,
-    Decoration = 3
-}
+
 
 public enum ProductState
 {
@@ -24,5 +18,6 @@ public enum AnnonceStatus
 {
     Pending = 0,
     Approved = 1,
-    Rejected = 2
+    Rejected = 2,
+    UnderReview = 3
 }

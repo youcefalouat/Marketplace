@@ -38,4 +38,29 @@ public class User
     public Commune Commune { get; set; } = null!;
     public ICollection<Annonce> Annonces { get; set; } = new List<Annonce>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
+    public ICollection<UserRating> ReceivedRatings { get; set; } = new List<UserRating>();
+    
+    // Auth provider (Google, Facebook, etc) - null for local accounts
+    [MaxLength(50)]
+    public string? Provider { get; set; }
+    
+    [MaxLength(255)]
+    public string? ProviderId { get; set; }
+    
+    // Phone verification
+    public bool PhoneVerified { get; set; } = false;
+    
+    [MaxLength(10)]
+    public string? PhoneVerificationCode { get; set; }
+    
+    public DateTime? PhoneVerificationExpiry { get; set; }
+    
+    // Email and Account Status
+    public bool EmailVerified { get; set; } = false;
+    
+    [MaxLength(64)]
+    public string? EmailVerificationCode { get; set; }
+    
+    public DateTime? EmailVerificationExpiry { get; set; }
+    public bool IsDeleted { get; set; } = false;
 }

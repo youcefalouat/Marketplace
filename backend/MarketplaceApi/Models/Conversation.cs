@@ -20,6 +20,8 @@ public class Conversation
 
     public DateTime LastMessageAt { get; set; } = DateTime.UtcNow;
 
+    public bool IsModeration { get; set; } = false;
+
     // Navigation properties
     public Annonce Annonce { get; set; } = null!;
     

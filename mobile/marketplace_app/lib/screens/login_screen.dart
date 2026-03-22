@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import 'complete_profile_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,8 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -45,6 +47,50 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _mockSocialLogin(String provider) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.socialLogin(
+      provider: provider,
+      providerId: 'mock_${provider.toLowerCase()}_123',
+      email: 'mockuser@$provider.com',
+      name: 'Mock $provider User',
+      accessToken: 'dummy_token',
+    );
+
+    if (success && mounted) {
+      if (authProvider.user?.phone.isEmpty ?? true) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.error ?? 'Erreur de connexion sociale'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _continueAsGuest() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -176,7 +222,60 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                           },
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
+                        const Row(
+                          children: [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: Text('OU'),
+                            ),
+                            Expanded(child: Divider()),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Social Buttons
+                        Consumer<AuthProvider>(
+                          builder: (context, auth, child) {
+                            return Column(
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: auth.isLoading
+                                      ? null
+                                      : () => _mockSocialLogin('Google'),
+                                  icon:
+                                      const Icon(Icons.g_mobiledata, size: 32),
+                                  label: const Text('Continuer avec Google'),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: auth.isLoading
+                                      ? null
+                                      : () => _mockSocialLogin('Facebook'),
+                                  icon: const Icon(Icons.facebook,
+                                      color: Colors.blue),
+                                  label: const Text('Continuer avec Facebook'),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 24),
 
                         // Register link
                         Row(
@@ -194,6 +293,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: const Text('S\'inscrire'),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _continueAsGuest,
+                          child: const Text('Continuer vers l\'accueil'),
                         ),
                       ],
                     ),

@@ -39,8 +39,11 @@
                         <p class="card-text">
                             <strong class="text-primary fs-5">@annonce.Price.ToString("N0") €</strong>
                         </p>
+                        <p class="card-text">
+                            <span class="badge @GetStatusBadgeClass(annonce.Status)">@GetStatusLabel(annonce.Status)</span>
+                        </p>
                         <p class="card-text small text-muted">
-                            <i class="bi bi-tag me-1"></i>@annonce.Category<br/>
+                            <i class="bi bi-tag me-1"></i>@annonce.Category.Name<br/>
                             <i class="bi bi-geo-alt me-1"></i>@annonce.Wilaya?.Name, @annonce.Commune?.Name<br/>
                             <i class="bi bi-person me-1"></i>@annonce.User.Name<br/>
                             <i class="bi bi-phone me-1"></i>@annonce.User.Phone
@@ -89,7 +92,8 @@ else
             .Include(a => a.Images)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
-            .Where(a => a.Status == AnnonceStatus.Pending)
+            .Include(a => a.Category)
+            .Where(a => a.Status == AnnonceStatus.Pending || a.Status == AnnonceStatus.UnderReview)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync();
     }
@@ -115,4 +119,22 @@ else
             await LoadAnnonces();
         }
     }
+
+    private string GetStatusBadgeClass(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.UnderReview => "bg-info",
+        AnnonceStatus.Approved => "bg-success",
+        AnnonceStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusLabel(AnnonceStatus status) => status switch
+    {
+        AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.UnderReview => "En révision",
+        AnnonceStatus.Approved => "Approuvée",
+        AnnonceStatus.Rejected => "Refusée",
+        _ => status.ToString()
+    };
 }

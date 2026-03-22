@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
 import 'annonce_detail_screen.dart';
+import 'moderation_thread_screen.dart';
 
 class MyAnnoncesScreen extends StatefulWidget {
   const MyAnnoncesScreen({super.key});
@@ -22,6 +23,41 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
 
   void _loadMyAnnonces() {
     Provider.of<AnnoncesProvider>(context, listen: false).loadMyAnnonces();
+  }
+
+  Future<void> _openAdminChatIfAvailable(MyAnnonce annonce) async {
+    final threadId = annonce.moderationThreadId;
+    if (threadId == null) {
+      return;
+    }
+
+    try {
+      final thread = await ApiService().getModerationThread(threadId);
+      if (!mounted) return;
+
+      if (thread.messages.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aucun message de l\'admin pour le moment.'),
+          ),
+        );
+        return;
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ModerationThreadScreen(threadId: threadId),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucun message de l\'admin pour le moment.'),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteAnnonce(MyAnnonce annonce) async {
@@ -64,6 +100,8 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     switch (status.toLowerCase()) {
       case 'pending':
         return Colors.orange;
+      case 'underreview':
+        return Colors.blue;
       case 'approved':
         return Colors.green;
       case 'rejected':
@@ -77,6 +115,8 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     switch (status.toLowerCase()) {
       case 'pending':
         return 'En attente';
+      case 'underreview':
+        return 'En révision';
       case 'approved':
         return 'Approuvée';
       case 'rejected':
@@ -90,6 +130,8 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     switch (status.toLowerCase()) {
       case 'pending':
         return Icons.hourglass_empty;
+      case 'underreview':
+        return Icons.chat_bubble_outline;
       case 'approved':
         return Icons.check_circle;
       case 'rejected':
@@ -163,45 +205,85 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
 
   Widget _buildAnnonceCard(MyAnnonce annonce) {
     final statusColor = _getStatusColor(annonce.status);
+    final isGoodDeal = annonce.isGoodDeal;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
+        side: isGoodDeal
+            ? BorderSide(color: Colors.green.shade400, width: 1.2)
+            : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: annonce.status.toLowerCase() == 'approved'
-            ? () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
-                  ),
-                )
-            : null,
+        onTap: () async {
+          final status = annonce.status.toLowerCase();
+          if (status == 'approved') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
+              ),
+            );
+            return;
+          }
+
+          if (status == 'underreview' && annonce.moderationThreadId != null) {
+            await _openAdminChatIfAvailable(annonce);
+          }
+        },
         child: Row(
           children: [
             // Image
             SizedBox(
               width: 100,
               height: 100,
-              child: annonce.mainImageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: ApiService.getImageUrl(annonce.mainImageUrl)!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  annonce.mainImageUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl:
+                              ApiService.getImageUrl(annonce.mainImageUrl)!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                                child: CircularProgressIndicator()),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.image_not_supported),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.image, color: Colors.grey),
+                        ),
+                  if (isGoodDeal)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade600.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Bonne affaire',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.image_not_supported),
-                      ),
-                    )
-                  : Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.image, color: Colors.grey),
                     ),
+                ],
+              ),
             ),
 
             // Info
@@ -222,9 +304,11 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${annonce.price.toStringAsFixed(0)} €',
+                      '${annonce.price.toStringAsFixed(0)} DA',
                       style: TextStyle(
-                        color: Theme.of(context).primaryColor,
+                        color: isGoodDeal
+                            ? Colors.green.shade700
+                            : Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),

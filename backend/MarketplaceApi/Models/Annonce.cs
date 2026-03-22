@@ -23,7 +23,7 @@ public class Annonce
     public decimal Price { get; set; }
     
     [Required]
-    public Category Category { get; set; }
+    public int CategoryId { get; set; }
     
     [Required]
     public ProductState State { get; set; }
@@ -57,6 +57,7 @@ public class Annonce
     public User User { get; set; } = null!;
     public Wilaya Wilaya { get; set; } = null!;
     public Commune Commune { get; set; } = null!;
+    public Category Category { get; set; } = null!;
     public ICollection<AnnonceImage> Images { get; set; } = new List<AnnonceImage>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
 }

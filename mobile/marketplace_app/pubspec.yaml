@@ -36,6 +36,8 @@ dependencies:
   
   # Form Validation
   intl: ^0.18.1
+  google_sign_in: ^7.2.0
+  flutter_facebook_auth: ^7.1.5
 
   
 

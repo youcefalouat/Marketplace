@@ -101,17 +101,230 @@ public class AuthController : ControllerBase
     [HttpPost("social-login")]
     public async Task<ActionResult<AuthResponseDto>> SocialLogin([FromBody] SocialLoginDto dto)
     {
-        // TODO: Validate the social token with Google/Facebook API
-        // For now, return a placeholder response
-        // In production, you would:
-        // 1. Verify the token with the provider
-        // 2. Extract user info (email, name)
-        // 3. Find or create the user
-        // 4. Generate a JWT token
+        // Note: In production, you would verify dto.AccessToken with Google/Facebook API first
+        // to ensure the request is legitimate and extract the real email/name.
+        // For now, we trust the provided DTO (simplified setup).
+
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower() || 
+                                      (u.Provider == dto.Provider && u.ProviderId == dto.ProviderId));
+            
+        if (user == null)
+        {
+            // Auto-create account
+            // Get default location (Alger - 16)
+            var wilaya = await _context.Wilayas.FirstOrDefaultAsync(w => w.Code == "16");
+            var commune = await _context.Communes.FirstOrDefaultAsync(c => c.WilayaId == wilaya!.Id);
+            
+            user = new User
+            {
+                Email = dto.Email.ToLower(),
+                Name = dto.Name,
+                Provider = dto.Provider,
+                ProviderId = dto.ProviderId,
+                PasswordHash = "", 
+                Phone = "", 
+                WilayaId = wilaya?.Id ?? 1,
+                CommuneId = commune?.Id ?? 1,
+                Role = UserRole.User,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            
+            // Reload with includes
+            user = await _context.Users
+                .Include(u => u.Wilaya)
+                .Include(u => u.Commune)
+                .FirstAsync(u => u.Id == user.Id);
+        }
+        else if (string.IsNullOrEmpty(user.Provider))
+        {
+            // Link existing local account to this social provider
+            user.Provider = dto.Provider;
+            user.ProviderId = dto.ProviderId;
+            await _context.SaveChangesAsync();
+        }
         
-        return BadRequest(new { message = "Social login not yet configured. Please provide Google/Facebook client IDs." });
+        var token = _tokenService.GenerateToken(user);
+        
+        return Ok(new AuthResponseDto
+        {
+            Token = token,
+            User = MapToUserDto(user, user.Wilaya?.Name ?? "", user.Commune?.Name ?? "")
+        });
     }
     
+    [HttpPut("profile")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<ActionResult<UserDto>> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+            return NotFound(new { message = "Utilisateur introuvable" });
+
+        // Validate wilaya and commune
+        var wilaya = await _context.Wilayas.FindAsync(dto.WilayaId);
+        if (wilaya == null)
+            return BadRequest(new { message = "Wilaya invalide" });
+
+        var commune = await _context.Communes.FirstOrDefaultAsync(
+            c => c.Id == dto.CommuneId && c.WilayaId == dto.WilayaId);
+        if (commune == null)
+            return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+
+        user.Name = dto.Name;
+        user.Phone = dto.Phone;
+        user.WilayaId = dto.WilayaId;
+        user.CommuneId = dto.CommuneId;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(MapToUserDto(user, wilaya.Name, commune.Name));
+    }
+    
+    /// <summary>
+    /// Send phone verification code (mocked — code logged to console)
+    /// </summary>
+    [HttpPost("send-verification")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<ActionResult> SendVerificationCode([FromBody] SendVerificationDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return NotFound();
+
+        // Update phone number
+        user.Phone = dto.Phone;
+        
+        // Generate 6-digit code
+        var code = new Random().Next(100000, 999999).ToString();
+        user.PhoneVerificationCode = code;
+        user.PhoneVerificationExpiry = DateTime.UtcNow.AddMinutes(10);
+        user.PhoneVerified = false;
+        
+        await _context.SaveChangesAsync();
+        
+        // MOCK: Log the code to console instead of sending real SMS
+        Console.WriteLine($"[MOCK SMS] Verification code for {dto.Phone}: {code}");
+        
+        return Ok(new { message = "Code de vérification envoyé", mockCode = code });
+    }
+    
+    /// <summary>
+    /// Verify phone with code
+    /// </summary>
+    [HttpPost("verify-phone")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<ActionResult> VerifyPhone([FromBody] VerifyPhoneDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized();
+
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) return NotFound();
+
+        if (user.PhoneVerificationCode != dto.Code)
+            return BadRequest(new { message = "Code incorrect" });
+        
+        if (user.PhoneVerificationExpiry < DateTime.UtcNow)
+            return BadRequest(new { message = "Code expiré. Veuillez renvoyer un nouveau code." });
+
+        user.PhoneVerified = true;
+        user.PhoneVerificationCode = null;
+        user.PhoneVerificationExpiry = null;
+        
+        await _context.SaveChangesAsync();
+        
+        return Ok(MapToUserDto(user, user.Wilaya?.Name ?? "", user.Commune?.Name ?? ""));
+    }
+    
+    /// <summary>
+    /// Send email verification code (mocked — code logged to console)
+    /// </summary>
+    [HttpPost("send-email-verification")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<ActionResult> SendEmailVerification([FromBody] SendEmailVerificationDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return NotFound();
+
+        if (user.Email.ToLower() != dto.Email.ToLower())
+            return BadRequest(new { message = "L'email ne correspond pas à votre compte." });
+
+        // Generate 6-digit code
+        var code = new Random().Next(100000, 999999).ToString();
+        user.EmailVerificationCode = code;
+        user.EmailVerificationExpiry = DateTime.UtcNow.AddMinutes(15);
+        user.EmailVerified = false;
+        
+        await _context.SaveChangesAsync();
+        
+        // MOCK: Log the code to console instead of sending real email
+        Console.WriteLine($"[MOCK EMAIL] Verification code for {dto.Email}: {code}");
+        
+        return Ok(new { message = "Code de vérification envoyé sur votre email", mockCode = code });
+    }
+    
+    /// <summary>
+    /// Verify email with code
+    /// </summary>
+    [HttpPost("verify-email")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<ActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized();
+
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) return NotFound();
+
+        if (user.Email.ToLower() != dto.Email.ToLower())
+            return BadRequest(new { message = "L'email ne correspond pas à votre compte." });
+
+        if (user.EmailVerificationCode != dto.Code)
+            return BadRequest(new { message = "Code incorrect" });
+        
+        if (user.EmailVerificationExpiry < DateTime.UtcNow)
+            return BadRequest(new { message = "Code expiré. Veuillez renvoyer un nouveau code." });
+
+        user.EmailVerified = true;
+        user.EmailVerificationCode = null;
+        user.EmailVerificationExpiry = null;
+        
+        await _context.SaveChangesAsync();
+        
+        return Ok(MapToUserDto(user, user.Wilaya?.Name ?? "", user.Commune?.Name ?? ""));
+    }
+
     private static UserDto MapToUserDto(User user, string wilayaName, string communeName)
     {
         return new UserDto
@@ -124,7 +337,9 @@ public class AuthController : ControllerBase
             CommuneId = user.CommuneId,
             WilayaName = wilayaName,
             CommuneName = communeName,
-            Role = user.Role.ToString()
+            Role = user.Role.ToString(),
+            PhoneVerified = user.PhoneVerified,
+            EmailVerified = user.EmailVerified
         };
     }
 }

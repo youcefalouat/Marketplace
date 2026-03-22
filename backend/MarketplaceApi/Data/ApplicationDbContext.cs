@@ -11,6 +11,7 @@ public class ApplicationDbContext : DbContext
     }
     
     public DbSet<User> Users { get; set; }
+    public DbSet<Category> Categories { get; set; }
     public DbSet<Annonce> Annonces { get; set; }
     public DbSet<AnnonceImage> AnnonceImages { get; set; }
     public DbSet<AdminNote> AdminNotes { get; set; }
@@ -18,6 +19,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Commune> Communes { get; set; }
     public DbSet<Conversation> Conversations { get; set; }
     public DbSet<Message> Messages { get; set; }
+    public DbSet<UserRating> UserRatings { get; set; }
+    public DbSet<ModerationThread> ModerationThreads { get; set; }
+    public DbSet<ModerationMessage> ModerationMessages { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,7 +62,6 @@ public class ApplicationDbContext : DbContext
         // Annonce configuration
         modelBuilder.Entity<Annonce>(entity =>
         {
-            entity.Property(e => e.Category).HasConversion<int>();
             entity.Property(e => e.State).HasConversion<int>();
             entity.Property(e => e.Status).HasConversion<int>();
             
@@ -78,8 +81,19 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
             
             entity.HasIndex(e => e.Status);
-            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.CategoryId);
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // Category configuration
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.HasIndex(e => e.Slug).IsUnique();
+
+            entity.HasOne(c => c.Parent)
+                .WithMany(c => c.SubCategories)
+                .HasForeignKey(c => c.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
         
         // AnnonceImage configuration
@@ -136,6 +150,54 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // UserRating configuration
+        modelBuilder.Entity<UserRating>(entity =>
+        {
+            entity.HasIndex(r => new { r.SellerId, r.RaterId }).IsUnique();
+
+            entity.HasOne(r => r.Seller)
+                .WithMany(u => u.ReceivedRatings)
+                .HasForeignKey(r => r.SellerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Rater)
+                .WithMany()
+                .HasForeignKey(r => r.RaterId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Moderation configuration (models added separately)
+        modelBuilder.Entity<ModerationThread>(entity =>
+        {
+            entity.HasOne(t => t.Annonce)
+                .WithMany()
+                .HasForeignKey(t => t.AnnonceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(t => t.Owner)
+                .WithMany()
+                .HasForeignKey(t => t.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(t => t.AnnonceId).IsUnique();
+        });
+
+        modelBuilder.Entity<ModerationMessage>(entity =>
+        {
+            entity.HasOne(m => m.Thread)
+                .WithMany(t => t.Messages)
+                .HasForeignKey(m => m.ThreadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(m => m.ThreadId);
+            entity.HasIndex(m => m.SentAt);
         });
     }
 }

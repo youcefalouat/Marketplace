@@ -56,7 +56,8 @@ public class ChatController : ControllerBase
                 InterlocutorName = interlocutor.Name,
                 LastMessageAt = c.LastMessageAt,
                 LastMessageContent = lastMessage?.Content ?? "",
-                HasUnreadMessages = c.Messages.Any(m => m.SenderId != userId && !m.IsRead)
+                HasUnreadMessages = c.Messages.Any(m => m.SenderId != userId && !m.IsRead),
+                IsModeration = c.IsModeration
             };
         });
 
@@ -155,7 +156,8 @@ public class ChatController : ControllerBase
                 InterlocutorName = interlocutor.Name,
                 LastMessageAt = existingConversation.LastMessageAt,
                 LastMessageContent = lastMessage?.Content ?? "",
-                HasUnreadMessages = existingConversation.Messages.Any(m => m.SenderId != userId && !m.IsRead)
+                HasUnreadMessages = existingConversation.Messages.Any(m => m.SenderId != userId && !m.IsRead),
+                IsModeration = existingConversation.IsModeration
             });
         }
 
@@ -186,7 +188,8 @@ public class ChatController : ControllerBase
             InterlocutorName = annonce.User.Name,
             LastMessageAt = conversation.LastMessageAt,
             LastMessageContent = "",
-            HasUnreadMessages = false
+            HasUnreadMessages = false,
+            IsModeration = false
         });
     }
 

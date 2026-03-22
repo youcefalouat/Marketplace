@@ -15,11 +15,15 @@ public class AnnoncesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IBlobStorageService _blobStorage;
+    private readonly IRatingService _ratingService;
+    private readonly IAnnonceFeedService _feedService;
     
-    public AnnoncesController(ApplicationDbContext context, IBlobStorageService blobStorage)
+    public AnnoncesController(ApplicationDbContext context, IBlobStorageService blobStorage, IRatingService ratingService, IAnnonceFeedService feedService)
     {
         _context = context;
         _blobStorage = blobStorage;
+        _ratingService = ratingService;
+        _feedService = feedService;
     }
     
     /// <summary>
@@ -32,13 +36,25 @@ public class AnnoncesController : ControllerBase
             .Include(a => a.Images)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
+            .Include(a => a.Category)
             .Where(a => a.Status == AnnonceStatus.Approved)
             .AsQueryable();
         
         // Apply filters
-        if (filter.Category.HasValue)
+        if (filter.CategoryId.HasValue)
         {
-            query = query.Where(a => a.Category == filter.Category.Value);
+            // Include category and all subcategories
+            var categoryIds = await GetCategoryAndSubcategoryIds(filter.CategoryId.Value);
+            query = query.Where(a => categoryIds.Contains(a.CategoryId));
+        }
+        
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var searchStr = filter.Search.ToLower();
+            query = query.Where(a => 
+                a.Title.ToLower().Contains(searchStr) || 
+                a.Description.ToLower().Contains(searchStr) ||
+                a.Category.Name.ToLower().Contains(searchStr));
         }
         
         if (filter.MinPrice.HasValue)
@@ -51,35 +67,65 @@ public class AnnoncesController : ControllerBase
             query = query.Where(a => a.Price <= filter.MaxPrice.Value);
         }
         
-        if (filter.WilayaId.HasValue)
+        if (filter.WilayaIds != null && filter.WilayaIds.Any())
         {
-            query = query.Where(a => a.WilayaId == filter.WilayaId.Value);
+            query = query.Where(a => filter.WilayaIds.Contains(a.WilayaId));
         }
         
-        if (filter.CommuneId.HasValue)
+        if (filter.CommuneIds != null && filter.CommuneIds.Any())
         {
-            query = query.Where(a => a.CommuneId == filter.CommuneId.Value);
+            query = query.Where(a => filter.CommuneIds.Contains(a.CommuneId));
         }
         
         var totalCount = await query.CountAsync();
         
-        var items = await query
+        var rawItems = await query
             .OrderByDescending(a => a.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
-            .Select(a => new AnnonceListDto
+            .Select(a => new
             {
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
                 WilayaName = a.Wilaya.Name,
                 CommuneName = a.Commune.Name,
-                Category = a.Category.ToString(),
+                Category = a.Category.Name,
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 IsExchange = a.IsExchange,
+                IsGoodDeal = a.IsGoodDeal,
+                SellerId = a.UserId,
                 CreatedAt = a.CreatedAt
             })
             .ToListAsync();
+
+        var sellerSummaries = await _ratingService.GetSellerSummariesAsync(rawItems.Select(i => i.SellerId));
+        var items = rawItems.Select(a =>
+        {
+            double? avg = null;
+            int? count = null;
+            if (sellerSummaries.TryGetValue(a.SellerId, out var summary) && summary.RatingCount > 0)
+            {
+                avg = summary.AverageRating;
+                count = summary.RatingCount;
+            }
+
+            return new AnnonceListDto
+            {
+                Id = a.Id,
+                Title = a.Title,
+                Price = a.Price,
+                WilayaName = a.WilayaName,
+                CommuneName = a.CommuneName,
+                Category = a.Category,
+                MainImageUrl = a.MainImageUrl,
+                IsExchange = a.IsExchange,
+                IsGoodDeal = a.IsGoodDeal,
+                SellerAverageRating = avg,
+                SellerRatingCount = count,
+                CreatedAt = a.CreatedAt
+            };
+        }).ToList();
         
         return Ok(new PaginatedResponse<AnnonceListDto>
         {
@@ -102,6 +148,7 @@ public class AnnoncesController : ControllerBase
             .Include(a => a.User).ThenInclude(u => u.Commune)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
+            .Include(a => a.Category)
             .FirstOrDefaultAsync(a => a.Id == id && a.Status == AnnonceStatus.Approved);
         
         if (annonce == null)
@@ -109,7 +156,18 @@ public class AnnoncesController : ControllerBase
             return NotFound();
         }
         
-        return Ok(MapToDetailDto(annonce));
+        var sellerRating = await _ratingService.GetSellerSummaryAsync(annonce.UserId);
+        return Ok(MapToDetailDto(annonce, sellerRating));
+    }
+
+    /// <summary>
+    /// Featured/random feed for home discovery (public)
+    /// </summary>
+    [HttpGet("featured")]
+    public async Task<ActionResult<List<AnnonceListDto>>> GetFeatured([FromQuery] int? count)
+    {
+        var featured = await _feedService.GetFeaturedAnnoncesAsync(count);
+        return Ok(featured);
     }
     
     /// <summary>
@@ -128,6 +186,12 @@ public class AnnoncesController : ControllerBase
         if (user == null)
         {
             return Unauthorized();
+        }
+        
+        // Check phone verification
+        if (!user.PhoneVerified)
+        {
+            return StatusCode(403, new { message = "Veuillez vérifier votre numéro de téléphone avant de publier une annonce", requiresPhoneVerification = true });
         }
         
         // Validate images count
@@ -156,7 +220,7 @@ public class AnnoncesController : ControllerBase
             Title = dto.Title,
             Description = dto.Description,
             Price = dto.Price,
-            Category = dto.Category,
+            CategoryId = dto.CategoryId,
             State = dto.State,
             Phone = dto.Phone ?? user.Phone,
             WilayaId = wilayaId,
@@ -195,9 +259,11 @@ public class AnnoncesController : ControllerBase
             .Include(a => a.User).ThenInclude(u => u.Commune)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
+            .Include(a => a.Category)
             .FirstAsync(a => a.Id == annonce.Id);
         
-        return CreatedAtAction(nameof(GetAnnonce), new { id = annonce.Id }, MapToDetailDto(annonce));
+        var sellerRating = await _ratingService.GetSellerSummaryAsync(annonce.UserId);
+        return CreatedAtAction(nameof(GetAnnonce), new { id = annonce.Id }, MapToDetailDto(annonce, sellerRating));
     }
     
     /// <summary>
@@ -211,6 +277,7 @@ public class AnnoncesController : ControllerBase
         
         var annonces = await _context.Annonces
             .Include(a => a.Images)
+            .Include(a => a.Category)
             .Where(a => a.UserId == userId)
             .OrderByDescending(a => a.CreatedAt)
             .Select(a => new MyAnnonceDto
@@ -218,9 +285,14 @@ public class AnnoncesController : ControllerBase
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
-                Category = a.Category.ToString(),
+                Category = a.Category.Name,
                 Status = a.Status.ToString(),
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                IsGoodDeal = a.IsGoodDeal,
+                ModerationThreadId = _context.Conversations
+                    .Where(t => t.AnnonceId == a.Id && t.IsModeration)
+                    .Select(t => (int?)t.Id)
+                    .FirstOrDefault(),
                 CreatedAt = a.CreatedAt
             })
             .ToListAsync();
@@ -271,15 +343,23 @@ public class AnnoncesController : ControllerBase
         return int.Parse(userIdClaim ?? "0");
     }
     
-    private static AnnonceDetailDto MapToDetailDto(Annonce annonce)
+    private static AnnonceDetailDto MapToDetailDto(Annonce annonce, SellerRatingAggregate? sellerRating)
     {
+        double? avg = null;
+        int? count = null;
+        if (sellerRating != null && sellerRating.RatingCount > 0)
+        {
+            avg = sellerRating.AverageRating;
+            count = sellerRating.RatingCount;
+        }
+
         var dto = new AnnonceDetailDto
         {
             Id = annonce.Id,
             Title = annonce.Title,
             Description = annonce.Description,
             Price = annonce.Price,
-            Category = annonce.Category.ToString(),
+            Category = annonce.Category.Name,
             State = annonce.State.ToString(),
             Phone = annonce.ShowPhone ? annonce.Phone : string.Empty,
             ShowPhone = annonce.ShowPhone,
@@ -289,17 +369,38 @@ public class AnnoncesController : ControllerBase
             CommuneName = annonce.Commune.Name,
             IsExchange = annonce.IsExchange,
             Status = annonce.Status.ToString(),
+            IsGoodDeal = annonce.IsGoodDeal,
             CreatedAt = annonce.CreatedAt,
             ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
             Seller = new SellerInfoDto
             {
+                Id = annonce.UserId,
                 Name = annonce.User.Name,
                 Phone = annonce.ShowPhone ? annonce.User.Phone : string.Empty,
                 WilayaName = annonce.User.Wilaya.Name,
-                CommuneName = annonce.User.Commune.Name
+                CommuneName = annonce.User.Commune.Name,
+                AverageRating = avg,
+                RatingCount = count
             }
         };
         
         return dto;
+    }
+    
+    private async Task<List<int>> GetCategoryAndSubcategoryIds(int categoryId)
+    {
+        var categoryIds = new List<int> { categoryId };
+        
+        var subcategories = await _context.Categories
+            .Where(c => c.ParentId == categoryId)
+            .Select(c => c.Id)
+            .ToListAsync();
+            
+        foreach (var subId in subcategories)
+        {
+            categoryIds.AddRange(await GetCategoryAndSubcategoryIds(subId));
+        }
+        
+        return categoryIds.Distinct().ToList();
     }
 }

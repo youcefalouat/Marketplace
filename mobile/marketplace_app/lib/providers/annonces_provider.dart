@@ -14,11 +14,12 @@ class AnnoncesProvider with ChangeNotifier {
   int _totalPages = 1;
 
   // Filters
-  int? _categoryFilter;
+  int? _categoryIdFilter;
+  String? _searchQuery;
   double? _minPrice;
   double? _maxPrice;
-  int? _wilayaFilter;
-  int? _communeFilter;
+  List<int>? _wilayaFilters;
+  List<int>? _communeFilters;
 
   // Getters
   List<AnnonceListItem> get annonces => _annonces;
@@ -31,11 +32,12 @@ class AnnoncesProvider with ChangeNotifier {
   bool get hasMore => _currentPage < _totalPages;
 
   // Filter getters
-  int? get categoryFilter => _categoryFilter;
+  int? get categoryIdFilter => _categoryIdFilter;
+  String? get searchQuery => _searchQuery;
   double? get minPrice => _minPrice;
   double? get maxPrice => _maxPrice;
-  int? get wilayaFilter => _wilayaFilter;
-  int? get communeFilter => _communeFilter;
+  List<int>? get wilayaFilters => _wilayaFilters;
+  List<int>? get communeFilters => _communeFilters;
 
   Future<void> loadAnnonces({bool refresh = false}) async {
     if (refresh) {
@@ -49,11 +51,12 @@ class AnnoncesProvider with ChangeNotifier {
 
     try {
       final response = await _apiService.getAnnonces(
-        category: _categoryFilter,
+        categoryId: _categoryIdFilter,
+        search: _searchQuery,
         minPrice: _minPrice,
         maxPrice: _maxPrice,
-        wilayaId: _wilayaFilter,
-        communeId: _communeFilter,
+        wilayaIds: _wilayaFilters,
+        communeIds: _communeFilters,
         page: _currentPage,
       );
 
@@ -81,26 +84,36 @@ class AnnoncesProvider with ChangeNotifier {
   }
 
   void setFilters({
-    int? category,
+    int? categoryId,
+    bool clearCategory = false,
+    String? search,
     double? minPrice,
     double? maxPrice,
-    int? wilayaId,
-    int? communeId,
+    List<int>? wilayaIds,
+    List<int>? communeIds,
   }) {
-    _categoryFilter = category;
-    _minPrice = minPrice;
+    if (clearCategory) {
+      _categoryIdFilter = null;
+    } else if (categoryId != null) {
+      _categoryIdFilter = categoryId;
+    }
+    if (search != null) _searchQuery = search.isEmpty ? null : search;
+    if (minPrice != null) _minPrice = minPrice;
     _maxPrice = maxPrice;
-    _wilayaFilter = wilayaId;
-    _communeFilter = communeId;
+    if (wilayaIds != null)
+      _wilayaFilters = wilayaIds.isEmpty ? null : wilayaIds;
+    if (communeIds != null)
+      _communeFilters = communeIds.isEmpty ? null : communeIds;
     loadAnnonces(refresh: true);
   }
 
   void clearFilters() {
-    _categoryFilter = null;
+    _categoryIdFilter = null;
+    _searchQuery = null;
     _minPrice = null;
     _maxPrice = null;
-    _wilayaFilter = null;
-    _communeFilter = null;
+    _wilayaFilters = null;
+    _communeFilters = null;
     loadAnnonces(refresh: true);
   }
 
@@ -137,7 +150,7 @@ class AnnoncesProvider with ChangeNotifier {
   }
 
   Future<bool> createAnnonce({
-    required int category,
+    required int categoryId,
     required String title,
     required String description,
     required double price,
@@ -155,7 +168,7 @@ class AnnoncesProvider with ChangeNotifier {
 
     try {
       await _apiService.createAnnonce(
-        category: category,
+        categoryId: categoryId,
         title: title,
         description: description,
         price: price,

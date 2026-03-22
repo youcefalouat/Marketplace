@@ -23,18 +23,55 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final ScrollController _scrollController = ScrollController();
 
-  final List<String> _categories = [
-    'Électroménager',
-    'Meubles',
-    'Literie',
-    'Décoration',
-  ];
+  List<CategoryModel> _apiCategories = [];
+  bool _loadingCategories = true;
+
+  List<Wilaya> _wilayas = [];
+  bool _loadingWilayas = true;
 
   @override
   void initState() {
     super.initState();
+    _loadCategories();
+    _loadWilayas();
     _loadAnnonces();
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await ApiService().getCategories();
+      if (!mounted) return;
+      setState(() {
+        _apiCategories = categories;
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingCategories = false);
+    }
+  }
+
+  Future<void> _loadWilayas() async {
+    try {
+      final wilayas = await ApiService().getWilayas();
+      if (!mounted) return;
+      setState(() {
+        _wilayas = wilayas;
+        _loadingWilayas = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingWilayas = false);
+    }
+  }
+
+  Future<List<Commune>> _loadCommunesForFilter(int wilayaId) async {
+    try {
+      return await ApiService().getCommunes(wilayaId);
+    } catch (e) {
+      return [];
+    }
   }
 
   @override
@@ -59,7 +96,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showFilterDialog() {
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-    int? selectedCategory = provider.categoryFilter;
+    int? initialCategoryId = provider.categoryIdFilter;
+    CategoryModel? selectedParentCategory;
+    CategoryModel? selectedSubCategory;
+
+    if (initialCategoryId != null) {
+      for (var parent in _apiCategories) {
+        if (parent.id == initialCategoryId) {
+          selectedParentCategory = parent;
+          break;
+        }
+        for (var sub in parent.subCategories) {
+          if (sub.id == initialCategoryId) {
+            selectedParentCategory = parent;
+            selectedSubCategory = sub;
+            break;
+          }
+        }
+        if (selectedParentCategory != null) break;
+      }
+    }
+
+    List<int> selectedWilayaIds = provider.wilayaFilters?.toList() ?? [];
+    List<int> selectedCommuneIds = provider.communeFilters?.toList() ?? [];
+    List<Commune> filterCommunes = [];
+    bool loadingFilterCommunes = false;
+
     final minPriceController = TextEditingController(
       text: provider.minPrice?.toString() ?? '',
     );
@@ -76,6 +138,39 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            Future<void> loadRelevantCommunes() async {
+              if (selectedWilayaIds.isEmpty) {
+                setModalState(() {
+                  filterCommunes = [];
+                  selectedCommuneIds = [];
+                });
+                return;
+              }
+              setModalState(() {
+                loadingFilterCommunes = true;
+              });
+              List<Commune> allRelevant = [];
+              for (int wId in selectedWilayaIds) {
+                try {
+                  final res = await _loadCommunesForFilter(wId);
+                  allRelevant.addAll(res);
+                } catch (_) {}
+              }
+              setModalState(() {
+                filterCommunes = allRelevant;
+                // Verify selected communes are still in the relevant list
+                selectedCommuneIds
+                    .removeWhere((id) => !allRelevant.any((c) => c.id == id));
+                loadingFilterCommunes = false;
+              });
+            }
+
+            // Initial load if wilayas are pre-selected
+            if (selectedWilayaIds.isNotEmpty &&
+                filterCommunes.isEmpty &&
+                !loadingFilterCommunes) {
+              loadRelevantCommunes();
+            }
             return Padding(
               padding: EdgeInsets.only(
                 left: 24,
@@ -111,21 +206,220 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: List.generate(_categories.length, (index) {
-                      return ChoiceChip(
-                        label: Text(_categories[index]),
-                        selected: selectedCategory == index,
-                        onSelected: (selected) {
-                          setModalState(() {
-                            selectedCategory = selected ? index : null;
-                          });
-                        },
-                      );
-                    }),
-                  ),
+                  _loadingCategories
+                      ? const Center(child: CircularProgressIndicator())
+                      : DropdownButtonFormField<CategoryModel>(
+                          initialValue: selectedParentCategory,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: 'Toutes les catégories',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: [
+                            const DropdownMenuItem<CategoryModel>(
+                              value: null,
+                              child: Text('Toutes'),
+                            ),
+                            ..._apiCategories.map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c.name),
+                                )),
+                          ],
+                          onChanged: (category) {
+                            setModalState(() {
+                              selectedParentCategory = category;
+                              selectedSubCategory = null;
+                            });
+                          },
+                        ),
                   const SizedBox(height: 16),
+
+                  if (selectedParentCategory != null &&
+                      selectedParentCategory!.subCategories.isNotEmpty) ...[
+                    DropdownButtonFormField<CategoryModel>(
+                      initialValue: selectedSubCategory,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Sous-catégorie',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: [
+                        const DropdownMenuItem<CategoryModel>(
+                          value: null,
+                          child: Text('Toutes'),
+                        ),
+                        ...selectedParentCategory!.subCategories
+                            .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c.name),
+                                )),
+                      ],
+                      onChanged: (category) {
+                        setModalState(() => selectedSubCategory = category);
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  // Wilaya filter
+                  Text(
+                    'Wilayas',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _loadingWilayas
+                      ? const Center(child: CircularProgressIndicator())
+                      : InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) {
+                                return StatefulBuilder(
+                                    builder: (ctx, setDialogState) {
+                                  return AlertDialog(
+                                    title: const Text('Sélectionner Wilayas'),
+                                    content: SizedBox(
+                                      width: double.maxFinite,
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: _wilayas.length,
+                                        itemBuilder: (ctx, index) {
+                                          final w = _wilayas[index];
+                                          final isSelected =
+                                              selectedWilayaIds.contains(w.id);
+                                          return CheckboxListTile(
+                                            title:
+                                                Text('${w.code} - ${w.name}'),
+                                            value: isSelected,
+                                            onChanged: (val) {
+                                              setDialogState(() {
+                                                if (val == true) {
+                                                  selectedWilayaIds.add(w.id);
+                                                } else {
+                                                  selectedWilayaIds
+                                                      .remove(w.id);
+                                                }
+                                              });
+                                              setModalState(() {});
+                                              loadRelevantCommunes();
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx),
+                                        child: const Text('OK'),
+                                      ),
+                                    ],
+                                  );
+                                });
+                              },
+                            );
+                          },
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: 'Toutes les wilayas',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(selectedWilayaIds.isEmpty
+                                    ? 'Toutes les wilayas'
+                                    : '${selectedWilayaIds.length} sélectionnée(s)'),
+                                const Icon(Icons.arrow_drop_down),
+                              ],
+                            ),
+                          ),
+                        ),
+                  const SizedBox(height: 16),
+
+                  // Commune filter
+                  if (selectedWilayaIds.isNotEmpty) ...[
+                    Text(
+                      'Communes',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    loadingFilterCommunes
+                        ? const Center(child: CircularProgressIndicator())
+                        : InkWell(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) {
+                                  return StatefulBuilder(
+                                      builder: (ctx, setDialogState) {
+                                    return AlertDialog(
+                                      title:
+                                          const Text('Sélectionner Communes'),
+                                      content: SizedBox(
+                                        width: double.maxFinite,
+                                        child: ListView.builder(
+                                          shrinkWrap: true,
+                                          itemCount: filterCommunes.length,
+                                          itemBuilder: (ctx, index) {
+                                            final c = filterCommunes[index];
+                                            final isSelected =
+                                                selectedCommuneIds
+                                                    .contains(c.id);
+                                            return CheckboxListTile(
+                                              title: Text(c.name),
+                                              value: isSelected,
+                                              onChanged: (val) {
+                                                setDialogState(() {
+                                                  if (val == true) {
+                                                    selectedCommuneIds
+                                                        .add(c.id);
+                                                  } else {
+                                                    selectedCommuneIds
+                                                        .remove(c.id);
+                                                  }
+                                                });
+                                                setModalState(() {});
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx),
+                                          child: const Text('OK'),
+                                        ),
+                                      ],
+                                    );
+                                  });
+                                },
+                              );
+                            },
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Toutes les communes',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(selectedCommuneIds.isEmpty
+                                      ? 'Toutes les communes'
+                                      : '${selectedCommuneIds.length} sélectionnée(s)'),
+                                  const Icon(Icons.arrow_drop_down),
+                                ],
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Price filter
                   Text(
@@ -167,10 +461,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Apply button
                   ElevatedButton(
                     onPressed: () {
+                      final finalCategoryId =
+                          selectedSubCategory?.id ?? selectedParentCategory?.id;
                       provider.setFilters(
-                        category: selectedCategory,
+                        categoryId: finalCategoryId,
+                        clearCategory: finalCategoryId == null &&
+                            initialCategoryId != null,
                         minPrice: double.tryParse(minPriceController.text),
                         maxPrice: double.tryParse(maxPriceController.text),
+                        wilayaIds: selectedWilayaIds,
+                        communeIds: selectedCommuneIds,
                       );
                       Navigator.pop(context);
                     },
@@ -202,6 +502,31 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _showFilterDialog,
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Rechercher...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Theme.of(context).cardColor,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onSubmitted: (value) {
+                final provider =
+                    Provider.of<AnnoncesProvider>(context, listen: false);
+                provider.setFilters(search: value);
+              },
+            ),
+          ),
+        ),
       ),
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(

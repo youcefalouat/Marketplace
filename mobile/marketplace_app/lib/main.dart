@@ -17,7 +17,7 @@ class MarketplaceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
         ChangeNotifierProvider(create: (_) => AnnoncesProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
@@ -56,23 +56,7 @@ class MarketplaceApp extends StatelessWidget {
             ),
           ),
         ),
-        home: Consumer<AuthProvider>(
-          builder: (context, auth, child) {
-            if (auth.isLoading) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            }
-
-            if (auth.isAuthenticated) {
-              return const HomeScreen();
-            }
-
-            return const LoginScreen();
-          },
-        ),
+        home: const HomeScreen(),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
+import 'complete_profile_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -112,6 +113,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _mockSocialLogin(String provider) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.socialLogin(
+      provider: provider,
+      providerId: 'mock_${provider.toLowerCase()}_123',
+      email: 'mockuser@$provider.com',
+      name: 'Mock $provider User',
+      accessToken: 'dummy_token',
+    );
+
+    if (success && mounted) {
+      if (authProvider.user?.phone.isEmpty ?? true) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.error ?? 'Erreur de connexion sociale'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -204,7 +237,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _loadingWilayas
                     ? const Center(child: CircularProgressIndicator())
                     : DropdownButtonFormField<Wilaya>(
-                        value: _selectedWilaya,
+                        initialValue: _selectedWilaya,
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Wilaya',
@@ -224,8 +257,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           if (wilaya != null) _loadCommunes(wilaya.id);
                         },
                         validator: (value) {
-                          if (value == null)
+                          if (value == null) {
                             return 'Veuillez sélectionner une wilaya';
+                          }
                           return null;
                         },
                       ),
@@ -235,7 +269,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _loadingCommunes
                     ? const Center(child: CircularProgressIndicator())
                     : DropdownButtonFormField<Commune>(
-                        value: _selectedCommune,
+                        initialValue: _selectedCommune,
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Commune',
@@ -256,8 +290,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 setState(() => _selectedCommune = commune);
                               },
                         validator: (value) {
-                          if (value == null)
+                          if (value == null) {
                             return 'Veuillez sélectionner une commune';
+                          }
                           return null;
                         },
                       ),
@@ -354,7 +389,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('OU'),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Social Buttons
+                Consumer<AuthProvider>(
+                  builder: (context, auth, child) {
+                    return Column(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: auth.isLoading
+                              ? null
+                              : () => _mockSocialLogin('Google'),
+                          icon: const Icon(Icons.g_mobiledata, size: 32),
+                          label: const Text('S\'inscrire avec Google'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: auth.isLoading
+                              ? null
+                              : () => _mockSocialLogin('Facebook'),
+                          icon: const Icon(Icons.facebook, color: Colors.blue),
+                          label: const Text('S\'inscrire avec Facebook'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
 
                 // Login link
                 Row(

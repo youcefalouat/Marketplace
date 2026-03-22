@@ -26,10 +26,10 @@
                 <label class="form-label">Catégorie</label>
                 <select class="form-select" @onchange="OnCategoryChange">
                     <option value="">Toutes</option>
-                    <option value="Electromenager">Électroménager</option>
-                    <option value="Meubles">Meubles</option>
-                    <option value="Literie">Literie</option>
-                    <option value="Decoration">Décoration</option>
+                    @foreach (var cat in _categories)
+                    {
+                        <option value="@cat.Id">@cat.Name</option>
+                    }
                 </select>
             </div>
             <div class="col-md-3">
@@ -78,7 +78,7 @@
                                 </span>
                             </td>
                             <td><strong>@annonce.Price.ToString("N0") €</strong></td>
-                            <td>@annonce.Category</td>
+                            <td>@annonce.Category.Name</td>
                             <td>
                                 <span class="badge @GetStatusBadgeClass(annonce.Status)">
                                     @GetStatusLabel(annonce.Status)
@@ -110,12 +110,14 @@
 
 @code {
     private List<Annonce> _annonces = new();
+    private List<Category> _categories = new();
     private AnnonceStatus? _statusFilter;
-    private Category? _categoryFilter;
+    private int? _categoryIdFilter;
     private bool? _goodDealFilter;
 
     protected override async Task OnInitializedAsync()
     {
+        _categories = await DbContext.Categories.OrderBy(c => c.Name).ToListAsync();
         await LoadAnnonces();
     }
 
@@ -123,13 +125,14 @@
     {
         var query = DbContext.Annonces
             .Include(a => a.User)
+            .Include(a => a.Category)
             .AsQueryable();
 
         if (_statusFilter.HasValue)
             query = query.Where(a => a.Status == _statusFilter.Value);
 
-        if (_categoryFilter.HasValue)
-            query = query.Where(a => a.Category == _categoryFilter.Value);
+        if (_categoryIdFilter.HasValue)
+            query = query.Where(a => a.CategoryId == _categoryIdFilter.Value);
 
         if (_goodDealFilter.HasValue)
             query = query.Where(a => a.IsGoodDeal == _goodDealFilter.Value);
@@ -147,7 +150,7 @@
 
     private async Task OnCategoryChange(ChangeEventArgs e)
     {
-        _categoryFilter = Enum.TryParse<Category>(e.Value?.ToString(), out var cat) ? cat : null;
+        _categoryIdFilter = int.TryParse(e.Value?.ToString(), out var cat) ? cat : null;
         await LoadAnnonces();
     }
 
@@ -160,7 +163,7 @@
     private async Task ResetFilters()
     {
         _statusFilter = null;
-        _categoryFilter = null;
+        _categoryIdFilter = null;
         _goodDealFilter = null;
         await LoadAnnonces();
     }
@@ -168,6 +171,7 @@
     private string GetStatusBadgeClass(AnnonceStatus status) => status switch
     {
         AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.UnderReview => "bg-info",
         AnnonceStatus.Approved => "bg-success",
         AnnonceStatus.Rejected => "bg-danger",
         _ => "bg-secondary"
@@ -176,6 +180,7 @@
     private string GetStatusLabel(AnnonceStatus status) => status switch
     {
         AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.UnderReview => "En révision",
         AnnonceStatus.Approved => "Approuvée",
         AnnonceStatus.Rejected => "Refusée",
         _ => status.ToString()

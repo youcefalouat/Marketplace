@@ -9,6 +9,7 @@ import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
 import 'chat_screen.dart';
 import 'login_screen.dart';
+import '../widgets/star_rating.dart';
 
 class AnnonceDetailScreen extends StatefulWidget {
   final int annonceId;
@@ -123,6 +124,114 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showRatingDialog(int sellerId, String sellerName) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Vous devez être connecté pour noter un vendeur')),
+      );
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
+
+    int selectedRating = 0;
+    final commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Noter $sellerName'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return IconButton(
+                        icon: Icon(
+                          index < selectedRating
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 32,
+                        ),
+                        onPressed: () {
+                          setState(() => selectedRating = index + 1);
+                        },
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: commentController,
+                    decoration: const InputDecoration(
+                      labelText: 'Commentaire (optionnel)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
+                  child: const Text('Annuler'),
+                ),
+                ElevatedButton(
+                  onPressed: (isSubmitting || selectedRating == 0)
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          try {
+                            await ApiService().submitRating(
+                              sellerId: sellerId,
+                              rating: selectedRating,
+                              comment: commentController.text.trim().isEmpty
+                                  ? null
+                                  : commentController.text.trim(),
+                            );
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('Note envoyée avec succès !')),
+                              );
+                              _loadAnnonce(); // reload to show new rating
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(e
+                                        .toString()
+                                        .replaceAll('Exception: ', ''))),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Envoyer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   String _getCategoryLabel(String category) {
@@ -243,6 +352,10 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   }
 
   Widget _buildContent(AnnonceDetail annonce) {
+    final isGoodDeal = annonce.isGoodDeal;
+    final hasSellerRating = annonce.seller.averageRating != null &&
+        (annonce.seller.ratingCount ?? 0) > 0;
+
     return CustomScrollView(
       slivers: [
         // Image Gallery
@@ -271,10 +384,39 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                 Text(
                   '${annonce.price.toStringAsFixed(0)} DA',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Theme.of(context).primaryColor,
+                        color: isGoodDeal
+                            ? Colors.green.shade700
+                            : Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
+                if (isGoodDeal) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade600.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.green.shade600),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.local_offer_outlined,
+                            size: 16, color: Colors.green.shade700),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Bonne affaire',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
 
                 // Tags
@@ -356,6 +498,14 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                                       fontSize: 16,
                                     ),
                                   ),
+                                  if (hasSellerRating) ...[
+                                    const SizedBox(height: 6),
+                                    StarRating(
+                                      average: annonce.seller.averageRating!,
+                                      count: annonce.seller.ratingCount!,
+                                      size: 14,
+                                    ),
+                                  ],
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
@@ -371,6 +521,19 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                                             TextStyle(color: Colors.grey[600]),
                                       ),
                                     ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _showRatingDialog(
+                                        annonce.seller.id, annonce.seller.name),
+                                    icon: const Icon(Icons.star_outline,
+                                        size: 18),
+                                    label: const Text('Noter ce vendeur'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      textStyle: const TextStyle(fontSize: 12),
+                                    ),
                                   ),
                                 ],
                               ),

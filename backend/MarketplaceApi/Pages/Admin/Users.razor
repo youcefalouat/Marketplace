@@ -1,0 +1,174 @@
+@page "/admin/users"
+@using MarketplaceApi.Data
+@using MarketplaceApi.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestion des utilisateurs</h2>
+</div>
+
+@if (users == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+    </div>
+}
+else if (!users.Any())
+{
+    <div class="alert alert-info">Aucun utilisateur trouvé.</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Nom</th>
+                            <th>Email</th>
+                            <th>Téléphone</th>
+                            <th class="text-center">Email Vérif.</th>
+                            <th class="text-center">Tél Vérif.</th>
+                            <th>Rôle</th>
+                            <th>Statut</th>
+                            <th>Date d'inscription</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in users)
+                        {
+                            <tr class="@(user.IsDeleted ? "text-muted bg-light" : "")">
+                                <td>@user.Id</td>
+                                <td>
+                                    <strong>@user.Name</strong>
+                                    <br />
+                                    <small class="text-muted">@(user.Wilaya?.Name) - @(user.Commune?.Name)</small>
+                                </td>
+                                <td>
+                                    @user.Email
+                                    @if (!string.IsNullOrEmpty(user.Provider))
+                                    {
+                                        <span class="badge bg-info ms-1">@user.Provider</span>
+                                    }
+                                </td>
+                                <td>@user.Phone</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm @(user.EmailVerified ? "btn-success" : "btn-outline-secondary")"
+                                            @onclick="() => ToggleEmailVerification(user)"
+                                            title="Basculer la vérification">
+                                        <i class="bi @(user.EmailVerified ? "bi-check-circle" : "bi-x-circle")"></i>
+                                    </button>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm @(user.PhoneVerified ? "btn-success" : "btn-outline-secondary")"
+                                            @onclick="() => TogglePhoneVerification(user)"
+                                            title="Basculer la vérification">
+                                        <i class="bi @(user.PhoneVerified ? "bi-check-circle" : "bi-x-circle")"></i>
+                                    </button>
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" 
+                                            value="@user.Role" 
+                                            @onchange="@(e => ChangeUserRole(user, e.Value?.ToString()))"
+                                            disabled="@(user.Id == 1 && user.Role == UserRole.Admin)"> <!-- Prevent locking out primary admin -->
+                                        @foreach (var role in Enum.GetValues<UserRole>())
+                                        {
+                                            <option value="@role">@role</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    @if (user.IsDeleted)
+                                    {
+                                        <span class="badge bg-danger">Supprimé (Soft)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Actif</span>
+                                    }
+                                </td>
+                                <td>@user.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end">
+                                    @if (user.Id != 1) // Do not allow deleting first admin
+                                    {
+                                        <button class="btn btn-sm @(user.IsDeleted ? "btn-warning" : "btn-outline-danger")" 
+                                                @onclick="() => ToggleUserDeletion(user)"
+                                                title="@(user.IsDeleted ? "Restaurer" : "Supprimer (Soft Delete)")">
+                                            <i class="bi @(user.IsDeleted ? "bi-arrow-counterclockwise" : "bi-trash")"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<User>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        users = await DbContext.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task ToggleEmailVerification(User user)
+    {
+        user.EmailVerified = !user.EmailVerified;
+        DbContext.Users.Update(user);
+        await DbContext.SaveChangesAsync();
+        await LoadUsers(); // Refresh
+    }
+
+    private async Task TogglePhoneVerification(User user)
+    {
+        user.PhoneVerified = !user.PhoneVerified;
+        DbContext.Users.Update(user);
+        await DbContext.SaveChangesAsync();
+        await LoadUsers(); // Refresh
+    }
+
+    private async Task ChangeUserRole(User user, string? roleStr)
+    {
+        if (Enum.TryParse<UserRole>(roleStr, out var newRole))
+        {
+            user.Role = newRole;
+            DbContext.Users.Update(user);
+            await DbContext.SaveChangesAsync();
+            await LoadUsers(); // Refresh
+        }
+    }
+
+    private async Task ToggleUserDeletion(User user)
+    {
+        user.IsDeleted = !user.IsDeleted;
+        
+        // If a user is deleted, you might also want to soft delete their annonces or cancel pending ones.
+        // For now, this is just a soft flag on the user.
+        
+        DbContext.Users.Update(user);
+        await DbContext.SaveChangesAsync();
+        await LoadUsers(); // Refresh
+    }
+}

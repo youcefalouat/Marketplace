@@ -14,6 +14,7 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
 // Add Blazor Server for Admin
+builder.Services.AddRazorPages();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -64,10 +65,17 @@ var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyWithAtLeast32Char
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = "JWT_OR_COOKIE";
+    options.DefaultChallengeScheme = "JWT_OR_COOKIE";
 })
-.AddJwtBearer(options =>
+.AddCookie(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.LoginPath = "/Admin/Login";
+    options.LogoutPath = "/Admin/Logout";
+    options.AccessDeniedPath = "/Admin/AccessDenied";
+    options.ExpireTimeSpan = TimeSpan.FromDays(1);
+})
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -79,6 +87,17 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
+})
+.AddPolicyScheme("JWT_OR_COOKIE", "JWT_OR_COOKIE", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        string authorization = context.Request.Headers["Authorization"].ToString();
+        if (!string.IsNullOrEmpty(authorization) && authorization.StartsWith("Bearer "))
+            return JwtBearerDefaults.AuthenticationScheme;
+        
+        return Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme;
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -86,6 +105,9 @@ builder.Services.AddAuthorization();
 // Register services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
+builder.Services.AddScoped<IRatingService, RatingService>();
+builder.Services.Configure<FeaturedFeedOptions>(builder.Configuration.GetSection("FeaturedFeed"));
+builder.Services.AddScoped<IAnnonceFeedService, AnnonceFeedService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -126,6 +148,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapRazorPages();
 app.MapHub<MarketplaceApi.Hubs.ChatHub>("/chatHub");
 
 // Map Blazor Admin routes
@@ -141,6 +164,9 @@ if (app.Environment.IsDevelopment())
     
     // Seed wilayas and communes
     LocationSeedData.SeedLocations(db);
+    
+    // Seed categories
+    CategorySeedData.SeedCategories(db);
     
     // Seed admin user if not exists
     if (!db.Users.Any(u => u.Role == MarketplaceApi.Models.UserRole.Admin))

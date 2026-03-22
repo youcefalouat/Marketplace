@@ -94,7 +94,7 @@
                             <tr>
                                 <td>@annonce.Title</td>
                                 <td>@annonce.Price.ToString("N0") €</td>
-                                <td>@annonce.Category</td>
+                                <td>@annonce.Category.Name</td>
                                 <td>@annonce.User.Name</td>
                                 <td>@annonce.CreatedAt.ToString("dd/MM/yyyy")</td>
                                 <td>
@@ -131,6 +131,7 @@
         
         _recentPending = await DbContext.Annonces
             .Include(a => a.User)
+            .Include(a => a.Category)
             .Where(a => a.Status == AnnonceStatus.Pending)
             .OrderByDescending(a => a.CreatedAt)
             .Take(5)

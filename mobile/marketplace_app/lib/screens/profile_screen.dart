@@ -4,6 +4,9 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'admin_categories_screen.dart';
+import 'email_verification_screen.dart';
+import 'my_annonces_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -227,6 +230,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Colors.grey[600],
                         ),
                   ),
+                  const SizedBox(height: 8),
+
+                  // Email verification status
+                  if (user.provider == null || user.provider!.isEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          user.emailVerified
+                              ? Icons.verified
+                              : Icons.warning_amber_rounded,
+                          size: 16,
+                          color:
+                              user.emailVerified ? Colors.green : Colors.orange,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          user.emailVerified
+                              ? 'Email vérifié'
+                              : 'Email non vérifié',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: user.emailVerified
+                                ? Colors.green
+                                : Colors.orange,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (!user.emailVerified) ...[
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () async {
+                              final result = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const EmailVerificationScreen(),
+                                ),
+                              );
+                              if (result == true && mounted) {
+                                setState(() {});
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Vérifier',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 32),
 
                   // Name field
@@ -327,7 +388,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                   const SizedBox(height: 32),
 
-                  // Save or Logout button
                   if (_isEditing)
                     SizedBox(
                       width: double.infinity,
@@ -345,7 +405,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             : const Text('Enregistrer'),
                       ),
                     )
-                  else
+                  else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MyAnnoncesScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.list_alt),
+                        label: const Text('Mes annonces'),
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (user.role == 'Admin') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const AdminCategoriesScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.category),
+                          label: const Text('Gestion des catégories (Admin)'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.blueGrey,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -364,6 +472,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),

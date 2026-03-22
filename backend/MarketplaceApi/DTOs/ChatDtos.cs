@@ -13,6 +13,7 @@ public class ConversationDto
     public DateTime LastMessageAt { get; set; }
     public string LastMessageContent { get; set; } = string.Empty;
     public bool HasUnreadMessages { get; set; }
+    public bool IsModeration { get; set; }
 }
 
 public class MessageDto

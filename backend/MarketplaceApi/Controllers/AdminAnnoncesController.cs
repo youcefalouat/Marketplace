@@ -28,14 +28,15 @@ public class AdminAnnoncesController : ControllerBase
     {
         var annonces = await _context.Annonces
             .Include(a => a.User)
-            .Where(a => a.Status == AnnonceStatus.Pending)
+            .Include(a => a.Category)
+            .Where(a => a.Status == AnnonceStatus.Pending || a.Status == AnnonceStatus.UnderReview)
             .OrderBy(a => a.CreatedAt)
             .Select(a => new AdminAnnonceListDto
             {
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
-                Category = a.Category.ToString(),
+                Category = a.Category.Name,
                 Status = a.Status.ToString(),
                 SellerName = a.User.Name,
                 SellerPhone = a.User.Phone,
@@ -56,6 +57,7 @@ public class AdminAnnoncesController : ControllerBase
     {
         var query = _context.Annonces
             .Include(a => a.User)
+            .Include(a => a.Category)
             .AsQueryable();
         
         if (status.HasValue)
@@ -70,7 +72,7 @@ public class AdminAnnoncesController : ControllerBase
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
-                Category = a.Category.ToString(),
+                Category = a.Category.Name,
                 Status = a.Status.ToString(),
                 SellerName = a.User.Name,
                 SellerPhone = a.User.Phone,
@@ -94,6 +96,7 @@ public class AdminAnnoncesController : ControllerBase
             .Include(a => a.User).ThenInclude(u => u.Commune)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
+            .Include(a => a.Category)
             .Include(a => a.Images)
             .Include(a => a.AdminNotes)
                 .ThenInclude(n => n.Admin)
@@ -110,7 +113,7 @@ public class AdminAnnoncesController : ControllerBase
             Title = annonce.Title,
             Description = annonce.Description,
             Price = annonce.Price,
-            Category = annonce.Category.ToString(),
+            Category = annonce.Category.Name,
             State = annonce.State.ToString(),
             Phone = annonce.Phone,
             WilayaId = annonce.WilayaId,
@@ -123,10 +126,13 @@ public class AdminAnnoncesController : ControllerBase
             ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
             Seller = new SellerInfoDto
             {
+                Id = annonce.UserId,
                 Name = annonce.User.Name,
                 Phone = annonce.User.Phone,
                 WilayaName = annonce.User.Wilaya.Name,
-                CommuneName = annonce.User.Commune.Name
+                CommuneName = annonce.User.Commune.Name,
+                AverageRating = null,
+                RatingCount = null
             },
             IsGoodDeal = annonce.IsGoodDeal,
             StorePriceEstimate = annonce.StorePriceEstimate,
@@ -154,6 +160,13 @@ public class AdminAnnoncesController : ControllerBase
         }
         
         annonce.Status = AnnonceStatus.Approved;
+
+        var thread = await _context.ModerationThreads.FirstOrDefaultAsync(t => t.AnnonceId == id);
+        if (thread != null && thread.ClosedAt == null)
+        {
+            thread.ClosedAt = DateTime.UtcNow;
+        }
+
         await _context.SaveChangesAsync();
         
         return Ok(new { message = "Annonce approuvée" });
@@ -173,6 +186,13 @@ public class AdminAnnoncesController : ControllerBase
         }
         
         annonce.Status = AnnonceStatus.Rejected;
+
+        var thread = await _context.ModerationThreads.FirstOrDefaultAsync(t => t.AnnonceId == id);
+        if (thread != null && thread.ClosedAt == null)
+        {
+            thread.ClosedAt = DateTime.UtcNow;
+        }
+
         await _context.SaveChangesAsync();
         
         return Ok(new { message = "Annonce refusée" });

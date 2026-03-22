@@ -13,8 +13,14 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _user != null;
+  bool get isGuest => _user == null;
   bool get isAdmin => _user?.role.toLowerCase() == 'admin';
   String? get token => _apiService.token;
+
+  void setUser(User user) {
+    _user = user;
+    notifyListeners();
+  }
 
   // Initialize and check existing auth
   Future<void> init() async {
@@ -97,7 +103,10 @@ class AuthProvider with ChangeNotifier {
   // Social login (Google / Facebook)
   Future<bool> socialLogin({
     required String provider,
-    required String accessToken,
+    required String providerId,
+    required String email,
+    required String name,
+    String? accessToken,
   }) async {
     _isLoading = true;
     _error = null;
@@ -106,6 +115,9 @@ class AuthProvider with ChangeNotifier {
     try {
       final authResponse = await _apiService.socialLogin(
         provider: provider,
+        providerId: providerId,
+        email: email,
+        name: name,
         accessToken: accessToken,
       );
       _user = authResponse.user;
@@ -138,6 +150,31 @@ class AuthProvider with ChangeNotifier {
         wilayaId: wilayaId,
         communeId: communeId,
       );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Email verification
+  Future<Map<String, dynamic>> sendEmailVerification() async {
+    if (_user == null) throw Exception('Non connecté');
+    return await _apiService.sendEmailVerificationCode(_user!.email);
+  }
+
+  Future<bool> verifyEmail(String code) async {
+    if (_user == null) throw Exception('Non connecté');
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _user = await _apiService.verifyEmail(_user!.email, code);
       _isLoading = false;
       notifyListeners();
       return true;

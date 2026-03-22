@@ -1,0 +1,218 @@
+@page "/admin/categories"
+@using MarketplaceApi.Data
+@using MarketplaceApi.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestion des catégories</h2>
+    <button class="btn btn-primary" @onclick="() => OpenModal(null)">
+        <i class="bi bi-plus-circle me-2"></i>Nouvelle Catégorie
+    </button>
+</div>
+
+@if (categories == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+    </div>
+}
+else if (!categories.Any())
+{
+    <div class="alert alert-info">Aucune catégorie trouvée.</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nom</th>
+                            <th>Slug</th>
+                            <th>Sous-catégories</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var parent in categories.Where(c => c.ParentId == null))
+                        {
+                            <tr class="table-secondary">
+                                <td><strong>@parent.Name</strong></td>
+                                <td>@parent.Slug</td>
+                                <td>@parent.SubCategories?.Count</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => OpenModal(parent.Id)">
+                                        <i class="bi bi-plus"></i> Sous-catégorie
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditCategory(parent)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteCategory(parent)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            @if (parent.SubCategories != null)
+                            {
+                                @foreach (var sub in parent.SubCategories)
+                                {
+                                    <tr>
+                                        <td class="ps-5"><i class="bi bi-arrow-return-right me-2 text-muted"></i>@sub.Name</td>
+                                        <td>@sub.Slug</td>
+                                        <td>-</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditCategory(sub)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteCategory(sub)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Modifier" : "Nouvelle") Catégorie</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nom</label>
+                        <input type="text" class="form-control" @bind="currentCategory.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Slug</label>
+                        <input type="text" class="form-control" @bind="currentCategory.Slug" placeholder="nom-de-categorie" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Catégorie Parente</label>
+                        <select class="form-select" @bind="currentCategory.ParentId">
+                            <option value="">Aucune (Catégorie principale)</option>
+                            @foreach (var c in categories!.Where(c => c.ParentId == null && c.Id != currentCategory.Id))
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Annuler</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveCategory">Saurvegarder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Category>? categories;
+    private bool showModal = false;
+    private bool isEditing = false;
+    private Category currentCategory = new Category();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await DbContext.Categories
+            .Include(c => c.SubCategories)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
+
+    private void OpenModal(int? parentId = null)
+    {
+        isEditing = false;
+        currentCategory = new Category { ParentId = parentId };
+        showModal = true;
+    }
+
+    private void EditCategory(Category cat)
+    {
+        isEditing = true;
+        currentCategory = new Category
+        {
+            Id = cat.Id,
+            Name = cat.Name,
+            Slug = cat.Slug,
+            ParentId = cat.ParentId
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveCategory()
+    {
+        if (string.IsNullOrWhiteSpace(currentCategory.Name)) return;
+        
+        if (string.IsNullOrWhiteSpace(currentCategory.Slug)) 
+        {
+            currentCategory.Slug = currentCategory.Name.ToLower().Replace(" ", "-").Replace("'", "");
+        }
+
+        if (isEditing)
+        {
+            var entity = await DbContext.Categories.FindAsync(currentCategory.Id);
+            if (entity != null)
+            {
+                entity.Name = currentCategory.Name;
+                entity.Slug = currentCategory.Slug;
+                entity.ParentId = currentCategory.ParentId;
+                entity.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else
+        {
+            currentCategory.CreatedAt = DateTime.UtcNow;
+            currentCategory.UpdatedAt = DateTime.UtcNow;
+            DbContext.Categories.Add(currentCategory);
+        }
+
+        await DbContext.SaveChangesAsync();
+        await LoadCategories();
+        showModal = false;
+    }
+
+    private async Task DeleteCategory(Category cat)
+    {
+        // Simple cascade delete handling or block if has subcategories/annonces
+        // For safe measure, let's just delete directly and rely on EF cascade if set, otherwise it throws exception.
+        try
+        {
+            DbContext.Categories.Remove(cat);
+            await DbContext.SaveChangesAsync();
+            await LoadCategories();
+        }
+        catch (Exception ex)
+        {
+            // Logging or show alert
+            Console.WriteLine($"Error removing category: {ex.Message}");
+        }
+    }
+}

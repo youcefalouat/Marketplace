@@ -109,6 +109,7 @@ else
     private string GetStatusBadgeClass(AnnonceStatus status) => status switch
     {
         AnnonceStatus.Pending => "bg-warning",
+        AnnonceStatus.UnderReview => "bg-info",
         AnnonceStatus.Approved => "bg-success",
         AnnonceStatus.Rejected => "bg-danger",
         _ => "bg-secondary"
@@ -117,6 +118,7 @@ else
     private string GetStatusLabel(AnnonceStatus status) => status switch
     {
         AnnonceStatus.Pending => "En attente",
+        AnnonceStatus.UnderReview => "En révision",
         AnnonceStatus.Approved => "Approuvée",
         AnnonceStatus.Rejected => "Refusée",
         _ => status.ToString()

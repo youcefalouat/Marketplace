@@ -44,7 +44,15 @@ public class SocialLoginDto
     public string Provider { get; set; } = string.Empty; // "Google" or "Facebook"
     
     [Required]
-    public string AccessToken { get; set; } = string.Empty;
+    public string ProviderId { get; set; } = string.Empty;
+    
+    [Required]
+    public string Email { get; set; } = string.Empty;
+    
+    [Required]
+    public string Name { get; set; } = string.Empty;
+    
+    public string? AccessToken { get; set; }
 }
 
 public class AuthResponseDto
@@ -65,6 +73,8 @@ public class UserDto
     public string WilayaName { get; set; } = string.Empty;
     public string CommuneName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public bool PhoneVerified { get; set; }
+    public bool EmailVerified { get; set; }
 }
 
 public class UpdateProfileDto
@@ -82,4 +92,34 @@ public class UpdateProfileDto
     
     [Required]
     public int CommuneId { get; set; }
+}
+
+public class SendVerificationDto
+{
+    [Required]
+    [Phone]
+    public string Phone { get; set; } = string.Empty;
+}
+
+public class VerifyPhoneDto
+{
+    [Required]
+    public string Code { get; set; } = string.Empty;
+}
+
+public class SendEmailVerificationDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+}
+
+public class VerifyEmailDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    public string Code { get; set; } = string.Empty;
 }

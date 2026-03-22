@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/annonces_provider.dart';
 import '../services/api_service.dart';
+import 'phone_verification_screen.dart';
 
 class CreateAnnonceScreen extends StatefulWidget {
   const CreateAnnonceScreen({super.key});
@@ -21,7 +22,10 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   final _priceController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  int _selectedCategory = 0;
+  CategoryModel? _selectedParentCategory;
+  CategoryModel? _selectedSubCategory;
+  List<CategoryModel> _apiCategories = [];
+  bool _loadingCategories = true;
   int _selectedState = 0;
   bool _isExchange = false;
   bool _showPhone = true;
@@ -36,20 +40,71 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   bool _loadingWilayas = true;
   bool _loadingCommunes = false;
 
-  final List<String> _categories = [
-    'Électroménager',
-    'Meubles',
-    'Literie',
-    'Décoration',
-  ];
-
   final List<String> _states = ['Neuf', 'Occasion'];
 
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     _loadWilayas();
     _prefillUserData();
+    _checkPhoneVerification();
+  }
+
+  void _checkPhoneVerification() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = Provider.of<AuthProvider>(context, listen: false).user;
+      if (user != null && !user.phoneVerified) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Vérification requise'),
+            content: const Text(
+              'Vous devez vérifier votre numéro de téléphone avant de publier une annonce.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context); // Go back
+                },
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final verified = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PhoneVerificationScreen(),
+                    ),
+                  );
+                  if (verified != true && mounted) {
+                    Navigator.pop(context); // Not verified, go back
+                  }
+                },
+                child: const Text('Vérifier'),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await ApiService().getCategories();
+      if (!mounted) return;
+      setState(() {
+        _apiCategories = categories;
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingCategories = false);
+    }
   }
 
   Future<void> _loadWilayas() async {
@@ -195,10 +250,35 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       return;
     }
 
+    if (_selectedParentCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner une catégorie'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Require subcategory if parent has them
+    if (_selectedParentCategory!.subCategories.isNotEmpty &&
+        _selectedSubCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner une sous-catégorie'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final int finalCategoryId =
+        _selectedSubCategory?.id ?? _selectedParentCategory!.id;
+
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
 
     final success = await provider.createAnnonce(
-      category: _selectedCategory,
+      categoryId: finalCategoryId,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       price: double.parse(_priceController.text),
@@ -260,20 +340,63 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: List.generate(_categories.length, (index) {
-                return ChoiceChip(
-                  label: Text(_categories[index]),
-                  selected: _selectedCategory == index,
-                  onSelected: (selected) {
-                    if (selected) setState(() => _selectedCategory = index);
-                  },
-                );
-              }),
-            ),
+            _loadingCategories
+                ? const Center(child: CircularProgressIndicator())
+                : DropdownButtonFormField<CategoryModel>(
+                    value: _selectedParentCategory,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Catégorie principale',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _apiCategories
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c.name),
+                            ))
+                        .toList(),
+                    onChanged: (category) {
+                      setState(() {
+                        _selectedParentCategory = category;
+                        _selectedSubCategory = null; // Reset subcategory
+                      });
+                    },
+                    validator: (val) => val == null
+                        ? 'Veuillez sélectionner une catégorie'
+                        : null,
+                  ),
             const SizedBox(height: 16),
+
+            // Subcategory Dropdown (conditionally shown)
+            if (_selectedParentCategory != null &&
+                _selectedParentCategory!.subCategories.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: DropdownButtonFormField<CategoryModel>(
+                  value: _selectedSubCategory,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Sous-catégorie',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _selectedParentCategory!.subCategories
+                      .map((c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c.name),
+                          ))
+                      .toList(),
+                  onChanged: (category) {
+                    setState(() => _selectedSubCategory = category);
+                  },
+                  validator: (val) => val == null
+                      ? 'Veuillez sélectionner une sous-catégorie'
+                      : null,
+                ),
+              ),
 
             // State
             Text(

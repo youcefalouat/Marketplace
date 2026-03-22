@@ -61,7 +61,7 @@ namespace MarketplaceApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Category")
+                    b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
                     b.Property<int>("CommuneId")
@@ -114,7 +114,7 @@ namespace MarketplaceApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Category");
+                    b.HasIndex("CategoryId");
 
                     b.HasIndex("CommuneId");
 
@@ -153,6 +153,43 @@ namespace MarketplaceApi.Migrations
                     b.HasIndex("AnnonceId");
 
                     b.ToTable("AnnonceImages");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.Category", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.Commune", b =>
@@ -201,6 +238,9 @@ namespace MarketplaceApi.Migrations
 
                     b.Property<int>("BuyerId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsModeration")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("LastMessageAt")
                         .HasColumnType("datetime2");
@@ -255,6 +295,75 @@ namespace MarketplaceApi.Migrations
                     b.ToTable("Messages");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsFromAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SenderId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ThreadId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("SentAt");
+
+                    b.HasIndex("ThreadId");
+
+                    b.ToTable("ModerationMessages");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationThread", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AnnonceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OwnerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnnonceId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("ModerationThreads");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -274,6 +383,19 @@ namespace MarketplaceApi.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("EmailVerificationCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("EmailVerificationExpiry")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("EmailVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -287,6 +409,24 @@ namespace MarketplaceApi.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PhoneVerificationCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("PhoneVerificationExpiry")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("PhoneVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
@@ -304,6 +444,40 @@ namespace MarketplaceApi.Migrations
                     b.HasIndex("WilayaId");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.UserRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RaterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SellerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaterId");
+
+                    b.HasIndex("SellerId", "RaterId")
+                        .IsUnique();
+
+                    b.ToTable("UserRatings");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.Wilaya", b =>
@@ -358,6 +532,12 @@ namespace MarketplaceApi.Migrations
 
             modelBuilder.Entity("MarketplaceApi.Models.Annonce", b =>
                 {
+                    b.HasOne("MarketplaceApi.Models.Category", "Category")
+                        .WithMany("Annonces")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("MarketplaceApi.Models.Commune", "Commune")
                         .WithMany()
                         .HasForeignKey("CommuneId")
@@ -376,6 +556,8 @@ namespace MarketplaceApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("Category");
+
                     b.Navigation("Commune");
 
                     b.Navigation("User");
@@ -392,6 +574,16 @@ namespace MarketplaceApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Annonce");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.Category", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.Category", "Parent")
+                        .WithMany("SubCategories")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.Commune", b =>
@@ -451,6 +643,44 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Sender");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationMessage", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.ModerationThread", "Thread")
+                        .WithMany("Messages")
+                        .HasForeignKey("ThreadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sender");
+
+                    b.Navigation("Thread");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationThread", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.Annonce", "Annonce")
+                        .WithMany()
+                        .HasForeignKey("AnnonceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Annonce");
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.User", b =>
                 {
                     b.HasOne("MarketplaceApi.Models.Commune", "Commune")
@@ -470,6 +700,25 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Wilaya");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.UserRating", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.User", "Rater")
+                        .WithMany()
+                        .HasForeignKey("RaterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.User", "Seller")
+                        .WithMany("ReceivedRatings")
+                        .HasForeignKey("SellerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rater");
+
+                    b.Navigation("Seller");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.Annonce", b =>
                 {
                     b.Navigation("AdminNotes");
@@ -477,7 +726,19 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Images");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.Category", b =>
+                {
+                    b.Navigation("Annonces");
+
+                    b.Navigation("SubCategories");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationThread", b =>
                 {
                     b.Navigation("Messages");
                 });
@@ -487,6 +748,8 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("AdminNotes");
 
                     b.Navigation("Annonces");
+
+                    b.Navigation("ReceivedRatings");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.Wilaya", b =>

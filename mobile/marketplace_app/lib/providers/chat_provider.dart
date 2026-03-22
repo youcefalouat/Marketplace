@@ -74,17 +74,19 @@ class ChatProvider with ChangeNotifier {
     if (content.trim().isEmpty) return;
 
     try {
-      // Optimistic update? Or wait for server?
-      // Wait for server to be safe
-      await _chatService.sendMessage(conversationId, content);
-      // The message will be added via onMessageReceived if we are connected and subscribed
-      // OR we can add it manually here if we want instant feedback
-      // But since we are sender, onMessageReceived might trigger for us too depending on backend
-      // Backend broadcasts to group, so we might receive it back.
-      // If backend sends back to group, let's rely on that or handle duplication.
-      // My backend implementation sends to "Others" or "All"?
-      // `_hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", messageDto);`
-      // This sends to EVERYONE in the group, including sender if they are in the group.
+      final sentMessage =
+          await _chatService.sendMessage(conversationId, content);
+
+      // Optimistically add the message if it wasn't already added by SignalR
+      if (!_currentMessages.any((m) => m.id == sentMessage.id)) {
+        _currentMessages.add(sentMessage);
+        notifyListeners();
+      }
+
+      // We don't necessarily need to reload conversations immediately here
+      // as the UI will just display the currentMessages, but we can do it if needed
+      // to keep the conversation list snippet up to date.
+      loadConversations();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
