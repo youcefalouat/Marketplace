@@ -1,16 +1,17 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../providers/auth_provider.dart';
-import '../providers/annonces_provider.dart';
 import '../models/models.dart';
-import 'annonce_detail_screen.dart';
-import 'create_annonce_screen.dart';
-import 'my_annonces_screen.dart';
-import 'profile_screen.dart';
-import 'login_screen.dart';
-import 'conversation_list_screen.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/star_rating.dart';
+import 'annonce_detail_screen.dart';
+import 'category_annonces_screen.dart';
+import 'conversation_list_screen.dart';
+import 'create_annonce_screen.dart';
+import 'login_screen.dart';
+import 'profile_screen.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,561 +21,169 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ApiService _apiService = ApiService();
+
   int _currentIndex = 0;
-  final ScrollController _scrollController = ScrollController();
-
-  List<CategoryModel> _apiCategories = [];
+  bool _loadingFeatured = true;
   bool _loadingCategories = true;
-
-  List<Wilaya> _wilayas = [];
-  bool _loadingWilayas = true;
+  String? _featuredError;
+  String? _categoriesError;
+  List<AnnonceListItem> _featuredAnnonces = [];
+  List<CategoryModel> _leafCategories = [];
 
   @override
   void initState() {
     super.initState();
-    _loadCategories();
-    _loadWilayas();
-    _loadAnnonces();
-    _scrollController.addListener(_onScroll);
+    _loadAccueilData();
   }
 
-  Future<void> _loadCategories() async {
+  Future<void> _loadAccueilData() async {
+    await Future.wait([
+      _loadFeaturedAnnonces(),
+      _loadLeafCategories(),
+    ]);
+  }
+
+  Future<void> _loadFeaturedAnnonces() async {
     try {
-      final categories = await ApiService().getCategories();
+      final featured = await _apiService.getFeaturedAnnonces(count: 20);
       if (!mounted) return;
       setState(() {
-        _apiCategories = categories;
+        _featuredAnnonces = featured;
+        _loadingFeatured = false;
+        _featuredError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingFeatured = false;
+        _featuredError = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _loadLeafCategories() async {
+    try {
+      final categories = await _apiService.getCategories();
+      if (!mounted) return;
+      setState(() {
+        _leafCategories = _extractLeafCategories(categories);
         _loadingCategories = false;
+        _categoriesError = null;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingCategories = false);
-    }
-  }
-
-  Future<void> _loadWilayas() async {
-    try {
-      final wilayas = await ApiService().getWilayas();
       if (!mounted) return;
       setState(() {
-        _wilayas = wilayas;
-        _loadingWilayas = false;
+        _loadingCategories = false;
+        _categoriesError = e.toString().replaceFirst('Exception: ', '');
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingWilayas = false);
     }
   }
 
-  Future<List<Commune>> _loadCommunesForFilter(int wilayaId) async {
-    try {
-      return await ApiService().getCommunes(wilayaId);
-    } catch (e) {
-      return [];
-    }
-  }
+  List<CategoryModel> _extractLeafCategories(List<CategoryModel> categories) {
+    final leaves = <CategoryModel>[];
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
+    void collect(CategoryModel category) {
+      if (category.subCategories.isEmpty) {
+        leaves.add(category);
+        return;
+      }
 
-  void _loadAnnonces() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-      provider.loadAnnonces(refresh: true);
-    });
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      Provider.of<AnnoncesProvider>(context, listen: false).loadMore();
-    }
-  }
-
-  void _showFilterDialog() {
-    final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-    int? initialCategoryId = provider.categoryIdFilter;
-    CategoryModel? selectedParentCategory;
-    CategoryModel? selectedSubCategory;
-
-    if (initialCategoryId != null) {
-      for (var parent in _apiCategories) {
-        if (parent.id == initialCategoryId) {
-          selectedParentCategory = parent;
-          break;
-        }
-        for (var sub in parent.subCategories) {
-          if (sub.id == initialCategoryId) {
-            selectedParentCategory = parent;
-            selectedSubCategory = sub;
-            break;
-          }
-        }
-        if (selectedParentCategory != null) break;
+      for (final subCategory in category.subCategories) {
+        collect(subCategory);
       }
     }
 
-    List<int> selectedWilayaIds = provider.wilayaFilters?.toList() ?? [];
-    List<int> selectedCommuneIds = provider.communeFilters?.toList() ?? [];
-    List<Commune> filterCommunes = [];
-    bool loadingFilterCommunes = false;
+    for (final category in categories) {
+      collect(category);
+    }
 
-    final minPriceController = TextEditingController(
-      text: provider.minPrice?.toString() ?? '',
+    return leaves;
+  }
+
+  Future<void> _openProtectedScreen(Widget screen) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
     );
-    final maxPriceController = TextEditingController(
-      text: provider.maxPrice?.toString() ?? '',
-    );
+  }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            Future<void> loadRelevantCommunes() async {
-              if (selectedWilayaIds.isEmpty) {
-                setModalState(() {
-                  filterCommunes = [];
-                  selectedCommuneIds = [];
-                });
-                return;
-              }
-              setModalState(() {
-                loadingFilterCommunes = true;
-              });
-              List<Commune> allRelevant = [];
-              for (int wId in selectedWilayaIds) {
-                try {
-                  final res = await _loadCommunesForFilter(wId);
-                  allRelevant.addAll(res);
-                } catch (_) {}
-              }
-              setModalState(() {
-                filterCommunes = allRelevant;
-                // Verify selected communes are still in the relevant list
-                selectedCommuneIds
-                    .removeWhere((id) => !allRelevant.any((c) => c.id == id));
-                loadingFilterCommunes = false;
-              });
-            }
-
-            // Initial load if wilayas are pre-selected
-            if (selectedWilayaIds.isNotEmpty &&
-                filterCommunes.isEmpty &&
-                !loadingFilterCommunes) {
-              loadRelevantCommunes();
-            }
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Filtres',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          provider.clearFilters();
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Réinitialiser'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Category filter
-                  Text(
-                    'Catégorie',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  _loadingCategories
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<CategoryModel>(
-                          initialValue: selectedParentCategory,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: 'Toutes les catégories',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: [
-                            const DropdownMenuItem<CategoryModel>(
-                              value: null,
-                              child: Text('Toutes'),
-                            ),
-                            ..._apiCategories.map((c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(c.name),
-                                )),
-                          ],
-                          onChanged: (category) {
-                            setModalState(() {
-                              selectedParentCategory = category;
-                              selectedSubCategory = null;
-                            });
-                          },
-                        ),
-                  const SizedBox(height: 16),
-
-                  if (selectedParentCategory != null &&
-                      selectedParentCategory!.subCategories.isNotEmpty) ...[
-                    DropdownButtonFormField<CategoryModel>(
-                      initialValue: selectedSubCategory,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: 'Sous-catégorie',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items: [
-                        const DropdownMenuItem<CategoryModel>(
-                          value: null,
-                          child: Text('Toutes'),
-                        ),
-                        ...selectedParentCategory!.subCategories
-                            .map((c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(c.name),
-                                )),
-                      ],
-                      onChanged: (category) {
-                        setModalState(() => selectedSubCategory = category);
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-
-                  // Wilaya filter
-                  Text(
-                    'Wilayas',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  _loadingWilayas
-                      ? const Center(child: CircularProgressIndicator())
-                      : InkWell(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) {
-                                return StatefulBuilder(
-                                    builder: (ctx, setDialogState) {
-                                  return AlertDialog(
-                                    title: const Text('Sélectionner Wilayas'),
-                                    content: SizedBox(
-                                      width: double.maxFinite,
-                                      child: ListView.builder(
-                                        shrinkWrap: true,
-                                        itemCount: _wilayas.length,
-                                        itemBuilder: (ctx, index) {
-                                          final w = _wilayas[index];
-                                          final isSelected =
-                                              selectedWilayaIds.contains(w.id);
-                                          return CheckboxListTile(
-                                            title:
-                                                Text('${w.code} - ${w.name}'),
-                                            value: isSelected,
-                                            onChanged: (val) {
-                                              setDialogState(() {
-                                                if (val == true) {
-                                                  selectedWilayaIds.add(w.id);
-                                                } else {
-                                                  selectedWilayaIds
-                                                      .remove(w.id);
-                                                }
-                                              });
-                                              setModalState(() {});
-                                              loadRelevantCommunes();
-                                            },
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(ctx),
-                                        child: const Text('OK'),
-                                      ),
-                                    ],
-                                  );
-                                });
-                              },
-                            );
-                          },
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              labelText: 'Toutes les wilayas',
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(selectedWilayaIds.isEmpty
-                                    ? 'Toutes les wilayas'
-                                    : '${selectedWilayaIds.length} sélectionnée(s)'),
-                                const Icon(Icons.arrow_drop_down),
-                              ],
-                            ),
-                          ),
-                        ),
-                  const SizedBox(height: 16),
-
-                  // Commune filter
-                  if (selectedWilayaIds.isNotEmpty) ...[
-                    Text(
-                      'Communes',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    loadingFilterCommunes
-                        ? const Center(child: CircularProgressIndicator())
-                        : InkWell(
-                            onTap: () {
-                              showDialog(
-                                context: context,
-                                builder: (ctx) {
-                                  return StatefulBuilder(
-                                      builder: (ctx, setDialogState) {
-                                    return AlertDialog(
-                                      title:
-                                          const Text('Sélectionner Communes'),
-                                      content: SizedBox(
-                                        width: double.maxFinite,
-                                        child: ListView.builder(
-                                          shrinkWrap: true,
-                                          itemCount: filterCommunes.length,
-                                          itemBuilder: (ctx, index) {
-                                            final c = filterCommunes[index];
-                                            final isSelected =
-                                                selectedCommuneIds
-                                                    .contains(c.id);
-                                            return CheckboxListTile(
-                                              title: Text(c.name),
-                                              value: isSelected,
-                                              onChanged: (val) {
-                                                setDialogState(() {
-                                                  if (val == true) {
-                                                    selectedCommuneIds
-                                                        .add(c.id);
-                                                  } else {
-                                                    selectedCommuneIds
-                                                        .remove(c.id);
-                                                  }
-                                                });
-                                                setModalState(() {});
-                                              },
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(ctx),
-                                          child: const Text('OK'),
-                                        ),
-                                      ],
-                                    );
-                                  });
-                                },
-                              );
-                            },
-                            child: InputDecorator(
-                              decoration: InputDecoration(
-                                labelText: 'Toutes les communes',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(selectedCommuneIds.isEmpty
-                                      ? 'Toutes les communes'
-                                      : '${selectedCommuneIds.length} sélectionnée(s)'),
-                                  const Icon(Icons.arrow_drop_down),
-                                ],
-                              ),
-                            ),
-                          ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Price filter
-                  Text(
-                    'Prix',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: minPriceController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Min',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: maxPriceController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Max',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Apply button
-                  ElevatedButton(
-                    onPressed: () {
-                      final finalCategoryId =
-                          selectedSubCategory?.id ?? selectedParentCategory?.id;
-                      provider.setFilters(
-                        categoryId: finalCategoryId,
-                        clearCategory: finalCategoryId == null &&
-                            initialCategoryId != null,
-                        minPrice: double.tryParse(minPriceController.text),
-                        maxPrice: double.tryParse(maxPriceController.text),
-                        wilayaIds: selectedWilayaIds,
-                        communeIds: selectedCommuneIds,
-                      );
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Appliquer'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  void _onTapBottomNav(int index) {
+    switch (index) {
+      case 0:
+      case 1:
+        setState(() => _currentIndex = index);
+        break;
+      case 2:
+        _openProtectedScreen(const CreateAnnonceScreen());
+        break;
+      case 3:
+      case 4:
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        if (!authProvider.isAuthenticated) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          return;
+        }
+        setState(() => _currentIndex = index);
+        break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Marketplace'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Rechercher...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              onSubmitted: (value) {
-                final provider =
-                    Provider.of<AnnoncesProvider>(context, listen: false);
-                provider.setFilters(search: value);
-              },
-            ),
-          ),
-        ),
-      ),
-      body: _buildBody(),
+      appBar: _currentIndex == 0
+          ? AppBar(
+              title: const Text('Marketplace'),
+              actions: [
+                if (authProvider.isGuest)
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    child: const Text('Connexion'),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.person_outline),
+                    onPressed: () => setState(() => _currentIndex = 4),
+                  ),
+              ],
+            )
+          : null,
+      body: _buildCurrentTab(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
-          if (index == _currentIndex) return;
-
-          final authProvider =
-              Provider.of<AuthProvider>(context, listen: false);
-
-          if (index > 0 && !authProvider.isAuthenticated) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-            return;
-          }
-
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CreateAnnonceScreen()),
-            );
-          } else if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ConversationListScreen()),
-            );
-          } else if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MyAnnoncesScreen()),
-            );
-          } else if (index == 4) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            );
-          } else {
-            setState(() => _currentIndex = index);
-          }
-        },
+        onTap: _onTapBottomNav,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search_outlined),
+            activeIcon: Icon(Icons.search),
+            label: 'Recherche',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.add_circle_outline),
@@ -587,11 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Messages',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt_outlined),
-            activeIcon: Icon(Icons.list_alt),
-            label: 'Mes annonces',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
             label: 'Profil',
@@ -601,127 +205,387 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBody() {
-    return Consumer<AnnoncesProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading && provider.annonces.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+  Widget _buildCurrentTab() {
+    switch (_currentIndex) {
+      case 1:
+        return const SearchScreen(embedded: true);
+      case 3:
+        return const ConversationListScreen();
+      case 4:
+        return const ProfileScreen();
+      case 0:
+      default:
+        return _buildAccueilBody();
+    }
+  }
 
-        if (provider.error != null && provider.annonces.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(provider.error!),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _loadAnnonces,
-                  child: const Text('Réessayer'),
+  Widget _buildAccueilBody() {
+    return RefreshIndicator(
+      onRefresh: _loadAccueilData,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+        children: [
+          Text(
+            'Decouvrir',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-          );
-        }
+          ),
+          const SizedBox(height: 16),
+          _buildFeaturedSection(),
+          const SizedBox(height: 28),
+          _buildSectionHeader(
+            title: 'Explorer par categorie',
+            subtitle: 'Sous-categories d abord, sinon categories finales',
+          ),
+          const SizedBox(height: 12),
+          _buildCategorySection(),
+        ],
+      ),
+    );
+  }
 
-        if (provider.annonces.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Aucune annonce trouvée',
-                  style: TextStyle(color: Colors.grey[600]),
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeaturedSection() {
+    if (_loadingFeatured) {
+      return const SizedBox(
+        height: 270,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_featuredError != null) {
+      return _buildInfoCard(
+        icon: Icons.error_outline,
+        message: _featuredError!,
+        actionLabel: 'Recharger',
+        onPressed: () {
+          setState(() {
+            _loadingFeatured = true;
+            _featuredError = null;
+          });
+          _loadFeaturedAnnonces();
+        },
+      );
+    }
+
+    if (_featuredAnnonces.isEmpty) {
+      return _buildInfoCard(
+        icon: Icons.inbox_outlined,
+        message: 'Aucune annonce disponible pour le moment.',
+      );
+    }
+
+    return SizedBox(
+      height: 270,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _featuredAnnonces.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final annonce = _featuredAnnonces[index];
+          return _FeaturedAnnonceCard(
+            annonce: annonce,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
                 ),
-              ],
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            provider.loadAnnonces(refresh: true);
-          },
-          child: GridView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(12),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: provider.annonces.length + (provider.hasMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index >= provider.annonces.length) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
-              return _buildAnnonceCard(provider.annonces[index]);
+              );
             },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCategorySection() {
+    if (_loadingCategories) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_categoriesError != null) {
+      return _buildInfoCard(
+        icon: Icons.category_outlined,
+        message: _categoriesError!,
+        actionLabel: 'Recharger',
+        onPressed: () {
+          setState(() {
+            _loadingCategories = true;
+            _categoriesError = null;
+          });
+          _loadLeafCategories();
+        },
+      );
+    }
+
+    if (_leafCategories.isEmpty) {
+      return _buildInfoCard(
+        icon: Icons.category_outlined,
+        message: 'Aucune categorie disponible.',
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.2,
+      ),
+      itemCount: _leafCategories.length,
+      itemBuilder: (context, index) {
+        final category = _leafCategories[index];
+        return InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CategoryAnnoncesScreen(
+                  categoryId: category.id,
+                  categoryName: category.name,
+                ),
+              ),
+            );
+          },
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.blue.shade50,
+                  Colors.white,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(color: Colors.blue.shade100),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade600.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _iconForCategory(category.name),
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    category.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Voir les annonces',
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildAnnonceCard(AnnonceListItem annonce) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AnnonceDetailScreen(annonceId: annonce.id),
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String message,
+    String? actionLabel,
+    VoidCallback? onPressed,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 34, color: Colors.grey[600]),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[700]),
           ),
-        );
-      },
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          if (actionLabel != null && onPressed != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: onPressed,
+              child: Text(actionLabel),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForCategory(String categoryName) {
+    final normalized = categoryName.toLowerCase();
+    if (normalized.contains('electro')) return Icons.kitchen_outlined;
+    if (normalized.contains('meuble')) return Icons.chair_outlined;
+    if (normalized.contains('literie')) return Icons.bed_outlined;
+    if (normalized.contains('decor')) return Icons.weekend_outlined;
+    if (normalized.contains('telephone')) return Icons.smartphone_outlined;
+    if (normalized.contains('auto')) return Icons.directions_car_outlined;
+    return Icons.grid_view_rounded;
+  }
+}
+
+class _FeaturedAnnonceCard extends StatelessWidget {
+  final AnnonceListItem annonce;
+  final VoidCallback onTap;
+
+  const _FeaturedAnnonceCard({
+    required this.annonce,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSellerRating =
+        annonce.sellerRating != null && (annonce.sellerRatingCount ?? 0) > 0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 215,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: annonce.isGoodDeal
+                ? Colors.green.shade300
+                : Colors.grey.shade200,
+            width: annonce.isGoodDeal ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
             Expanded(
-              flex: 3,
-              child: annonce.mainImageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: ApiService.getImageUrl(annonce.mainImageUrl)!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: CircularProgressIndicator(),
+              flex: 5,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(18),
+                    ),
+                    child: annonce.mainImageUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl:
+                                ApiService.getImageUrl(annonce.mainImageUrl)!,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => Container(
+                              color: Colors.grey[200],
+                              child: const Icon(Icons.image_not_supported),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_outlined,
+                                size: 42,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                  ),
+                  if (annonce.isGoodDeal)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade600,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Bonne affaire',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.image_not_supported),
-                      ),
-                    )
-                  : Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.image, size: 48, color: Colors.grey),
-                      ),
                     ),
+                ],
+              ),
             ),
-            // Info
             Expanded(
-              flex: 2,
+              flex: 4,
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -730,20 +594,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (hasSellerRating) ...[
+                      const SizedBox(height: 6),
+                      StarRating(
+                        average: annonce.sellerRating!,
+                        count: annonce.sellerRatingCount!,
+                        size: 13,
+                      ),
+                    ],
                     const Spacer(),
                     Text(
                       '${annonce.price.toStringAsFixed(0)} DA',
                       style: TextStyle(
-                        color: Theme.of(context).primaryColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        color: annonce.isGoodDeal
+                            ? Colors.green.shade700
+                            : Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Icon(
@@ -751,7 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           size: 14,
                           color: Colors.grey[600],
                         ),
-                        const SizedBox(width: 2),
+                        const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             annonce.wilayaName,
