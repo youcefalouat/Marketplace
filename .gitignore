@@ -34,3 +34,14 @@ venv/
 .gradle/
 android/.gradle/
 ios/Pods/
+
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Uploaded files (user content)
+**/wwwroot/uploads/
+**/wwwroot/images/
+
+# Sensitive test files
+*.json.bak

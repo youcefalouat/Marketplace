@@ -164,6 +164,26 @@ class AuthResponse {
   }
 }
 
+class ImageUrlDto {
+  final String url;
+  final String? thumbnailSmall;
+  final String? thumbnailMedium;
+
+  ImageUrlDto({
+    required this.url,
+    this.thumbnailSmall,
+    this.thumbnailMedium,
+  });
+
+  factory ImageUrlDto.fromJson(Map<String, dynamic> json) {
+    return ImageUrlDto(
+      url: json['url'] as String,
+      thumbnailSmall: json['thumbnailSmall'] as String?,
+      thumbnailMedium: json['thumbnailMedium'] as String?,
+    );
+  }
+}
+
 class AnnonceListItem {
   final int id;
   final String title;
@@ -172,6 +192,7 @@ class AnnonceListItem {
   final String communeName;
   final String category;
   final String? mainImageUrl;
+  final String? mainThumbnailUrl;
   final bool isExchange;
   final bool isGoodDeal;
   final double? sellerRating;
@@ -186,6 +207,7 @@ class AnnonceListItem {
     required this.communeName,
     required this.category,
     this.mainImageUrl,
+    this.mainThumbnailUrl,
     required this.isExchange,
     required this.isGoodDeal,
     this.sellerRating,
@@ -202,6 +224,7 @@ class AnnonceListItem {
       communeName: json['communeName'] as String? ?? '',
       category: json['category'] as String,
       mainImageUrl: json['mainImageUrl'] as String?,
+      mainThumbnailUrl: json['mainThumbnailUrl'] as String?,
       isExchange: json['isExchange'] as bool? ?? false,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       sellerRating: (json['sellerAverageRating'] as num?)?.toDouble(),
@@ -260,7 +283,7 @@ class AnnonceDetail {
   final String status;
   final bool isGoodDeal;
   final DateTime createdAt;
-  final List<String> imageUrls;
+  final List<ImageUrlDto> imageUrls;
   final SellerInfo seller;
 
   AnnonceDetail({
@@ -302,7 +325,9 @@ class AnnonceDetail {
       status: json['status'] as String,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
-      imageUrls: (json['imageUrls'] as List<dynamic>).cast<String>(),
+      imageUrls: (json['imageUrls'] as List<dynamic>)
+          .map((e) => ImageUrlDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
       seller: SellerInfo.fromJson(json['seller'] as Map<String, dynamic>),
     );
   }
@@ -315,6 +340,7 @@ class MyAnnonce {
   final String category;
   final String status;
   final String? mainImageUrl;
+  final String? mainThumbnailUrl;
   final bool isGoodDeal;
   final int? moderationThreadId;
   final DateTime createdAt;
@@ -326,6 +352,7 @@ class MyAnnonce {
     required this.category,
     required this.status,
     this.mainImageUrl,
+    this.mainThumbnailUrl,
     required this.isGoodDeal,
     this.moderationThreadId,
     required this.createdAt,
@@ -339,6 +366,7 @@ class MyAnnonce {
       category: json['category'] as String,
       status: json['status'] as String,
       mainImageUrl: json['mainImageUrl'] as String?,
+      mainThumbnailUrl: json['mainThumbnailUrl'] as String?,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       moderationThreadId: json['moderationThreadId'] as int?,
       createdAt: DateTime.parse(json['createdAt'] as String),
@@ -372,7 +400,7 @@ class PaginatedResponse<T> {
       totalCount: json['totalCount'] as int,
       page: json['page'] as int,
       pageSize: json['pageSize'] as int,
-      totalPages: (json['totalCount'] as int) ~/ (json['pageSize'] as int),
+      totalPages: ((json['totalCount'] as int) + (json['pageSize'] as int) - 1) ~/ (json['pageSize'] as int),
     );
   }
 }
@@ -387,6 +415,7 @@ class Conversation {
   final DateTime lastMessageAt;
   final String lastMessageContent;
   final bool hasUnreadMessages;
+  final bool isModeration;
 
   Conversation({
     required this.id,
@@ -398,6 +427,7 @@ class Conversation {
     required this.lastMessageAt,
     required this.lastMessageContent,
     required this.hasUnreadMessages,
+    this.isModeration = false,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
@@ -411,6 +441,7 @@ class Conversation {
       lastMessageAt: DateTime.parse(json['lastMessageAt'] as String),
       lastMessageContent: json['lastMessageContent'] as String? ?? '',
       hasUnreadMessages: json['hasUnreadMessages'] as bool? ?? false,
+      isModeration: json['isModeration'] as bool? ?? false,
     );
   }
 }

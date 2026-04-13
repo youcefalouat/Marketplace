@@ -21,13 +21,27 @@ class ChatProvider with ChangeNotifier {
     _chatService.onMessageReceived = (message) {
       _currentMessages.add(message);
 
-      // Update conversation last message if it exists in list
+      // Fix #21: Optimistically update the conversation in-memory
+      // instead of reloading all conversations from the server
       final index =
           _conversations.indexWhere((c) => c.id == message.conversationId);
       if (index != -1) {
-        // We can't update immutable Conversation object, maybe just reload conversations or create a copy
-        // For now, simpler to reload or just notify
-        loadConversations();
+        final old = _conversations[index];
+        _conversations[index] = Conversation(
+          id: old.id,
+          annonceId: old.annonceId,
+          annonceTitle: old.annonceTitle,
+          annonceImage: old.annonceImage,
+          interlocutorId: old.interlocutorId,
+          interlocutorName: old.interlocutorName,
+          lastMessageAt: message.sentAt,
+          lastMessageContent: message.content,
+          hasUnreadMessages: !message.isMe,
+          isModeration: old.isModeration,
+        );
+        // Move updated conversation to the top
+        final updated = _conversations.removeAt(index);
+        _conversations.insert(0, updated);
       }
 
       notifyListeners();

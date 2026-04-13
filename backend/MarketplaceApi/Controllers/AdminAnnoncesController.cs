@@ -123,7 +123,12 @@ public class AdminAnnoncesController : ControllerBase
             IsExchange = annonce.IsExchange,
             Status = annonce.Status.ToString(),
             CreatedAt = annonce.CreatedAt,
-            ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
+            ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => new ImageUrlDto
+            {
+                Url = i.ImagePath,
+                ThumbnailSmall = i.ThumbnailSmallPath,
+                ThumbnailMedium = i.ThumbnailMediumPath,
+            }).ToList(),
             Seller = new SellerInfoDto
             {
                 Id = annonce.UserId,

@@ -3,117 +3,219 @@ using Azure.Storage.Blobs.Models;
 
 namespace MarketplaceApi.Services;
 
+/// <summary>
+/// Result of storing a processed image (main + thumbnails).
+/// All paths are relative URLs suitable for database storage.
+/// </summary>
+public class ImageStorageResult
+{
+    public string ImagePath { get; init; } = string.Empty;
+    public string ThumbnailSmallPath { get; init; } = string.Empty;
+    public string ThumbnailMediumPath { get; init; } = string.Empty;
+}
+
 public interface IBlobStorageService
 {
-    Task<string> UploadImageAsync(IFormFile file, string containerName = "annonces");
-    Task DeleteImageAsync(string blobUrl);
-    Task<List<string>> UploadImagesAsync(IEnumerable<IFormFile> files, string containerName = "annonces");
+    /// <summary>
+    /// Stores an already-processed image (main + thumbnails) to local or Azure Blob storage.
+    /// </summary>
+    Task<ImageStorageResult> StoreProcessedImageAsync(ImageProcessingResult result);
+
+    /// <summary>
+    /// Deletes a single image by its relative path.
+    /// </summary>
+    Task DeleteImageAsync(string? imagePath);
+
+    /// <summary>
+    /// Deletes an image and its associated thumbnails.
+    /// </summary>
+    Task DeleteImageWithThumbnailsAsync(string? imagePath, string? thumbSmallPath, string? thumbMediumPath);
 }
 
 public class BlobStorageService : IBlobStorageService
 {
-    private readonly BlobServiceClient _blobServiceClient;
+    private readonly BlobServiceClient? _blobServiceClient;
     private readonly ILogger<BlobStorageService> _logger;
-    private readonly string _baseUrl;
-    
+
     public BlobStorageService(IConfiguration configuration, ILogger<BlobStorageService> logger)
     {
         var connectionString = configuration["AzureStorage:ConnectionString"];
-        
-        if (string.IsNullOrEmpty(connectionString))
+        _logger = logger;
+
+        if (!string.IsNullOrEmpty(connectionString))
         {
-            // Use local storage for development
-            _baseUrl = "/uploads";
-            _blobServiceClient = null!;
-            _logger = logger;
+            _blobServiceClient = new BlobServiceClient(connectionString);
+        }
+    }
+
+    private bool IsLocalMode => _blobServiceClient == null;
+
+    public async Task<ImageStorageResult> StoreProcessedImageAsync(ImageProcessingResult result)
+    {
+        var now = DateTime.UtcNow;
+        var basePath = $"images/{now:yyyy}/{now:MM}";
+        var hash = result.ContentHash;
+
+        var mainFileName = $"{hash}.webp";
+        var thumbSmallFileName = $"{hash}_150.webp";
+        var thumbMediumFileName = $"{hash}_300.webp";
+
+        if (IsLocalMode)
+        {
+            return await StoreLocallyAsync(result, basePath, mainFileName, thumbSmallFileName, thumbMediumFileName);
+        }
+
+        return await StoreToBlobAsync(result, basePath, mainFileName, thumbSmallFileName, thumbMediumFileName);
+    }
+
+    public async Task DeleteImageAsync(string? imagePath)
+    {
+        if (string.IsNullOrEmpty(imagePath)) return;
+
+        if (IsLocalMode)
+        {
+            DeleteLocalFile(imagePath);
             return;
         }
-        
-        _blobServiceClient = new BlobServiceClient(connectionString);
-        _baseUrl = configuration["AzureStorage:BaseUrl"] ?? "";
-        _logger = logger;
+
+        await DeleteBlobAsync(imagePath);
     }
-    
-    public async Task<string> UploadImageAsync(IFormFile file, string containerName = "annonces")
+
+    public async Task DeleteImageWithThumbnailsAsync(string? imagePath, string? thumbSmallPath, string? thumbMediumPath)
     {
-        if (_blobServiceClient == null)
+        // Fix #16: Run deletes in parallel instead of sequentially
+        await Task.WhenAll(
+            DeleteImageAsync(imagePath),
+            DeleteImageAsync(thumbSmallPath),
+            DeleteImageAsync(thumbMediumPath)
+        );
+    }
+
+    // ──────────────────────── Local Storage ────────────────────────
+
+    private async Task<ImageStorageResult> StoreLocallyAsync(
+        ImageProcessingResult result,
+        string basePath,
+        string mainFileName,
+        string thumbSmallFileName,
+        string thumbMediumFileName)
+    {
+        var wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+        // Main image
+        var mainDir = Path.Combine(wwwroot, basePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(mainDir);
+        var mainFilePath = Path.Combine(mainDir, mainFileName);
+        await WriteStreamToFileAsync(result.OptimizedImage, mainFilePath);
+
+        // Thumbnails
+        var thumbDir = Path.Combine(mainDir, "thumbs");
+        Directory.CreateDirectory(thumbDir);
+
+        var thumbSmallPath = Path.Combine(thumbDir, thumbSmallFileName);
+        await WriteStreamToFileAsync(result.ThumbnailSmall, thumbSmallPath);
+
+        var thumbMediumPath = Path.Combine(thumbDir, thumbMediumFileName);
+        await WriteStreamToFileAsync(result.ThumbnailMedium, thumbMediumPath);
+
+        _logger.LogInformation(
+            "Image stored locally: {Path} ({SizeKB}KB)",
+            mainFilePath, result.OptimizedSize / 1024);
+
+        return new ImageStorageResult
         {
-            // Local storage fallback for development
-            return await SaveLocallyAsync(file);
+            ImagePath = $"/{basePath}/{mainFileName}",
+            ThumbnailSmallPath = $"/{basePath}/thumbs/{thumbSmallFileName}",
+            ThumbnailMediumPath = $"/{basePath}/thumbs/{thumbMediumFileName}",
+        };
+    }
+
+    private static async Task WriteStreamToFileAsync(Stream source, string filePath)
+    {
+        source.Position = 0;
+        await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, useAsync: true);
+        await source.CopyToAsync(fileStream);
+    }
+
+    private void DeleteLocalFile(string relativePath)
+    {
+        // Support both old /uploads/ and new /images/ paths
+        var localPath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "wwwroot",
+            relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
+        if (File.Exists(localPath))
+        {
+            File.Delete(localPath);
+            _logger.LogInformation("Deleted local file: {Path}", localPath);
         }
-        
-        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+    }
+
+    // ──────────────────────── Azure Blob Storage ────────────────────────
+
+    private async Task<ImageStorageResult> StoreToBlobAsync(
+        ImageProcessingResult result,
+        string basePath,
+        string mainFileName,
+        string thumbSmallFileName,
+        string thumbMediumFileName)
+    {
+        const string containerName = "annonces";
+        var containerClient = _blobServiceClient!.GetBlobContainerClient(containerName);
         await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob);
-        
-        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-        var blobClient = containerClient.GetBlobClient(fileName);
-        
-        using var stream = file.OpenReadStream();
-        await blobClient.UploadAsync(stream, new BlobHttpHeaders 
-        { 
-            ContentType = file.ContentType 
-        });
-        
+
+        // Main image
+        var mainBlobPath = $"{basePath}/{mainFileName}";
+        var mainUrl = await UploadStreamToBlobAsync(containerClient, mainBlobPath, result.OptimizedImage, result.MimeType);
+
+        // Thumbnails
+        var thumbSmallBlobPath = $"{basePath}/thumbs/{thumbSmallFileName}";
+        var thumbSmallUrl = await UploadStreamToBlobAsync(containerClient, thumbSmallBlobPath, result.ThumbnailSmall, result.MimeType);
+
+        var thumbMediumBlobPath = $"{basePath}/thumbs/{thumbMediumFileName}";
+        var thumbMediumUrl = await UploadStreamToBlobAsync(containerClient, thumbMediumBlobPath, result.ThumbnailMedium, result.MimeType);
+
+        _logger.LogInformation(
+            "Image stored in Azure Blob: {Path} ({SizeKB}KB)",
+            mainBlobPath, result.OptimizedSize / 1024);
+
+        return new ImageStorageResult
+        {
+            ImagePath = mainUrl,
+            ThumbnailSmallPath = thumbSmallUrl,
+            ThumbnailMediumPath = thumbMediumUrl,
+        };
+    }
+
+    private static async Task<string> UploadStreamToBlobAsync(
+        BlobContainerClient containerClient,
+        string blobPath,
+        Stream content,
+        string contentType)
+    {
+        content.Position = 0;
+        var blobClient = containerClient.GetBlobClient(blobPath);
+        await blobClient.UploadAsync(content, new BlobHttpHeaders { ContentType = contentType });
         return blobClient.Uri.ToString();
     }
-    
-    public async Task<List<string>> UploadImagesAsync(IEnumerable<IFormFile> files, string containerName = "annonces")
+
+    private async Task DeleteBlobAsync(string blobUrl)
     {
-        var urls = new List<string>();
-        
-        foreach (var file in files)
-        {
-            var url = await UploadImageAsync(file, containerName);
-            urls.Add(url);
-        }
-        
-        return urls;
-    }
-    
-    public async Task DeleteImageAsync(string blobUrl)
-    {
-        if (_blobServiceClient == null || string.IsNullOrEmpty(blobUrl))
-        {
-            // Handle local file deletion
-            if (blobUrl?.StartsWith("/uploads") == true)
-            {
-                var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", blobUrl.TrimStart('/'));
-                if (File.Exists(localPath))
-                {
-                    File.Delete(localPath);
-                }
-            }
-            return;
-        }
-        
         try
         {
             var uri = new Uri(blobUrl);
+            // Path segments: [ "/", "containername/", "path/to/blob" ]
             var containerName = uri.Segments[1].TrimEnd('/');
-            var blobName = uri.Segments[2];
-            
-            var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+            var blobName = string.Join("", uri.Segments.Skip(2));
+
+            var containerClient = _blobServiceClient!.GetBlobContainerClient(containerName);
             var blobClient = containerClient.GetBlobClient(blobName);
-            
             await blobClient.DeleteIfExistsAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting blob: {BlobUrl}", blobUrl);
         }
-    }
-    
-    private async Task<string> SaveLocallyAsync(IFormFile file)
-    {
-        var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-        Directory.CreateDirectory(uploadsFolder);
-        
-        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-        var filePath = Path.Combine(uploadsFolder, fileName);
-        
-        using var stream = new FileStream(filePath, FileMode.Create);
-        await file.CopyToAsync(stream);
-        
-        return $"/uploads/{fileName}";
     }
 }

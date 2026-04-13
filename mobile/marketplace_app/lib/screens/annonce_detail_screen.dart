@@ -71,32 +71,13 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     }
 
     // Don't allow chatting with yourself
-    if (authProvider.user?.id == annonce.seller.name) {
-      // Wait, seller.name is not ID. seller info in AnnonceDetail doesn't have ID?
-      // AnnonceDetail has `seller` which is `SellerInfo`. SellerInfo has name, phone, locations. No ID?
-      // I need to check `AnnonceDetail` model.
+    if (authProvider.user?.id == annonce.seller.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Vous ne pouvez pas discuter sur votre propre annonce')),
+      );
+      return;
     }
-
-    // Check if we have seller ID in AnnonceDetail?
-    // The `AnnonceDetail` DTO in backend has `Seller` object.
-    // The `SellerInfo` class in mobile has `name`, `phone`, `wilayaName`, `communeName`.
-    // It seems I missed `id` in `SellerInfo`?
-    // Let's check `backend/MarketplaceApi/DTOs/AnnonceDto.cs` (or Controller map).
-    // In `AnnoncesController.cs` MapToDetailDto:
-    /*
-            Seller = new SellerInfoDto
-            {
-                Name = annonce.User.Name,
-                Phone = annonce.User.Phone,
-                WilayaName = annonce.User.Wilaya.Name,
-                CommuneName = annonce.User.Commune.Name
-            }
-    */
-    // It does NOT have ID.
-    // So I can't check if it's me easily, except maybe comparing names (unreliable).
-    // Or I need to add SellerId to AnnonceDetailDto.
-    // `Conversation` start endpoint needs `annonceId`.
-    // Backend handles "cannot chat with yourself".
 
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
@@ -553,7 +534,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     );
   }
 
-  Widget _buildImageGallery(List<String> imageUrls) {
+  Widget _buildImageGallery(List<ImageUrlDto> imageUrls) {
     if (imageUrls.isEmpty) {
       return Container(
         color: Colors.grey[200],
@@ -572,8 +553,9 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
             setState(() => _currentImageIndex = index);
           },
           itemBuilder: (context, index) {
+            final imageUrl = imageUrls[index].url;
             return CachedNetworkImage(
-              imageUrl: ApiService.getImageUrl(imageUrls[index])!,
+              imageUrl: ApiService.getImageUrl(imageUrl) ?? '',
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
                 color: Colors.grey[200],

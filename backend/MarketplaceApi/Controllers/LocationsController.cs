@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MarketplaceApi.Data;
 using MarketplaceApi.DTOs;
 
@@ -10,10 +11,12 @@ namespace MarketplaceApi.Controllers;
 public class LocationsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IMemoryCache _cache;
     
-    public LocationsController(ApplicationDbContext context)
+    public LocationsController(ApplicationDbContext context, IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
     
     /// <summary>
@@ -22,16 +25,22 @@ public class LocationsController : ControllerBase
     [HttpGet("wilayas")]
     public async Task<ActionResult<List<WilayaDto>>> GetWilayas()
     {
-        var wilayas = await _context.Wilayas
-            .OrderBy(w => w.Code)
-            .Select(w => new WilayaDto
-            {
-                Id = w.Id,
-                Code = w.Code,
-                Name = w.Name,
-                ArName = w.ArName
-            })
-            .ToListAsync();
+        // Fix #17: Cache wilayas for 6 hours (static reference data)
+        var wilayas = await _cache.GetOrCreateAsync("wilayas_all", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6);
+            return await _context.Wilayas
+                .AsNoTracking()
+                .OrderBy(w => w.Code)
+                .Select(w => new WilayaDto
+                {
+                    Id = w.Id,
+                    Code = w.Code,
+                    Name = w.Name,
+                    ArName = w.ArName
+                })
+                .ToListAsync();
+        });
         
         return Ok(wilayas);
     }
@@ -42,23 +51,35 @@ public class LocationsController : ControllerBase
     [HttpGet("wilayas/{wilayaId}/communes")]
     public async Task<ActionResult<List<CommuneDto>>> GetCommunes(int wilayaId)
     {
-        var wilayaExists = await _context.Wilayas.AnyAsync(w => w.Id == wilayaId);
-        if (!wilayaExists)
+        // Fix #17: Cache communes per wilaya for 6 hours
+        var cacheKey = $"communes_wilaya_{wilayaId}";
+        var communes = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            var wilayaExists = await _context.Wilayas.AnyAsync(w => w.Id == wilayaId);
+            if (!wilayaExists)
+            {
+                return null; // Signal not found
+            }
+            
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6);
+            return await _context.Communes
+                .AsNoTracking()
+                .Where(c => c.WilayaId == wilayaId)
+                .OrderBy(c => c.Name)
+                .Select(c => new CommuneDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    ArName = c.ArName,
+                    WilayaId = c.WilayaId
+                })
+                .ToListAsync();
+        });
+        
+        if (communes == null)
         {
             return NotFound(new { message = "Wilaya non trouvée" });
         }
-        
-        var communes = await _context.Communes
-            .Where(c => c.WilayaId == wilayaId)
-            .OrderBy(c => c.Name)
-            .Select(c => new CommuneDto
-            {
-                Id = c.Id,
-                Name = c.Name,
-                ArName = c.ArName,
-                WilayaId = c.WilayaId
-            })
-            .ToListAsync();
         
         return Ok(communes);
     }

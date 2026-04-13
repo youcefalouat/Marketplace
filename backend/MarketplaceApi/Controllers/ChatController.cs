@@ -24,50 +24,46 @@ public class ChatController : ControllerBase
         _hubContext = hubContext;
     }
 
+    // Fix #5: Use projection instead of loading all messages into memory
     [HttpGet("conversations")]
     public async Task<ActionResult<IEnumerable<ConversationDto>>> GetConversations()
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
 
         var conversations = await _context.Conversations
-            .Include(c => c.Annonce)
-                .ThenInclude(a => a.Images)
-            .Include(c => c.Buyer)
-            .Include(c => c.Seller)
-            .Include(c => c.Messages)
-            .Where(c => c.BuyerId == userId || c.SellerId == userId)
+            .AsNoTracking()
+            .Where(c => c.BuyerId == userId.Value || c.SellerId == userId.Value)
             .OrderByDescending(c => c.LastMessageAt)
-            .ToListAsync();
-
-        var dtos = conversations.Select(c =>
-        {
-            var isBuyer = c.BuyerId == userId;
-            var interlocutor = isBuyer ? c.Seller : c.Buyer;
-            var lastMessage = c.Messages.OrderByDescending(m => m.SentAt).FirstOrDefault();
-            var mainImage = c.Annonce.Images.OrderBy(i => i.DisplayOrder).FirstOrDefault();
-
-            return new ConversationDto
+            .Select(c => new ConversationDto
             {
                 Id = c.Id,
                 AnnonceId = c.AnnonceId,
                 AnnonceTitle = c.Annonce.Title,
-                AnnonceImage = mainImage != null ? mainImage.ImagePath : string.Empty,
-                InterlocutorId = interlocutor.Id,
-                InterlocutorName = interlocutor.Name,
+                AnnonceImage = c.Annonce.Images
+                    .OrderBy(i => i.DisplayOrder)
+                    .Select(i => i.ImagePath)
+                    .FirstOrDefault() ?? string.Empty,
+                InterlocutorId = c.BuyerId == userId.Value ? c.Seller.Id : c.Buyer.Id,
+                InterlocutorName = c.BuyerId == userId.Value ? c.Seller.Name : c.Buyer.Name,
                 LastMessageAt = c.LastMessageAt,
-                LastMessageContent = lastMessage?.Content ?? "",
-                HasUnreadMessages = c.Messages.Any(m => m.SenderId != userId && !m.IsRead),
+                LastMessageContent = c.Messages
+                    .OrderByDescending(m => m.SentAt)
+                    .Select(m => m.Content)
+                    .FirstOrDefault() ?? "",
+                HasUnreadMessages = c.Messages.Any(m => m.SenderId != userId.Value && !m.IsRead),
                 IsModeration = c.IsModeration
-            };
-        });
+            })
+            .ToListAsync();
 
-        return Ok(dtos);
+        return Ok(conversations);
     }
 
     [HttpGet("conversations/{id}/messages")]
     public async Task<ActionResult<IEnumerable<MessageDto>>> GetMessages(int id)
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
 
         var conversation = await _context.Conversations
             .Include(c => c.Messages)
@@ -78,14 +74,14 @@ public class ChatController : ControllerBase
             return NotFound();
         }
 
-        if (conversation.BuyerId != userId && conversation.SellerId != userId)
+        if (conversation.BuyerId != userId.Value && conversation.SellerId != userId.Value)
         {
             return Forbid();
         }
 
         // Mark messages as read
         var unreadMessages = conversation.Messages
-            .Where(m => m.SenderId != userId && !m.IsRead)
+            .Where(m => m.SenderId != userId.Value && !m.IsRead)
             .ToList();
 
         if (unreadMessages.Any())
@@ -105,7 +101,7 @@ public class ChatController : ControllerBase
             Content = m.Content,
             SentAt = m.SentAt,
             IsRead = m.IsRead,
-            IsMe = m.SenderId == userId
+            IsMe = m.SenderId == userId.Value
         });
 
         return Ok(messages);
@@ -114,7 +110,8 @@ public class ChatController : ControllerBase
     [HttpPost("start")]
     public async Task<ActionResult<ConversationDto>> StartConversation([FromBody] StartConversationDto dto)
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
         
         var annonce = await _context.Annonces
             .Include(a => a.User)
@@ -126,7 +123,7 @@ public class ChatController : ControllerBase
             return NotFound("Annonce non trouvée");
         }
 
-        if (annonce.UserId == userId)
+        if (annonce.UserId == userId.Value)
         {
             return BadRequest("Vous ne pouvez pas démarrer une conversation sur votre propre annonce");
         }
@@ -138,7 +135,7 @@ public class ChatController : ControllerBase
             .Include(c => c.Annonce)
                 .ThenInclude(a => a.Images)
             .Include(c => c.Messages)
-            .FirstOrDefaultAsync(c => c.AnnonceId == dto.AnnonceId && c.BuyerId == userId);
+            .FirstOrDefaultAsync(c => c.AnnonceId == dto.AnnonceId && c.BuyerId == userId.Value);
 
         if (existingConversation != null)
         {
@@ -156,7 +153,7 @@ public class ChatController : ControllerBase
                 InterlocutorName = interlocutor.Name,
                 LastMessageAt = existingConversation.LastMessageAt,
                 LastMessageContent = lastMessage?.Content ?? "",
-                HasUnreadMessages = existingConversation.Messages.Any(m => m.SenderId != userId && !m.IsRead),
+                HasUnreadMessages = existingConversation.Messages.Any(m => m.SenderId != userId.Value && !m.IsRead),
                 IsModeration = existingConversation.IsModeration
             });
         }
@@ -165,7 +162,7 @@ public class ChatController : ControllerBase
         var conversation = new Conversation
         {
             AnnonceId = dto.AnnonceId,
-            BuyerId = userId,
+            BuyerId = userId.Value,
             SellerId = annonce.UserId,
             StartedAt = DateTime.UtcNow,
             LastMessageAt = DateTime.UtcNow
@@ -174,8 +171,6 @@ public class ChatController : ControllerBase
         _context.Conversations.Add(conversation);
         await _context.SaveChangesAsync();
 
-        // Reload to get navigation properties if needed, or just construct DTO manually
-        // Since we have 'annonce' and 'userId', we can construct it 
         var mainImg = annonce.Images.OrderBy(i => i.DisplayOrder).FirstOrDefault();
 
         return CreatedAtAction(nameof(GetMessages), new { id = conversation.Id }, new ConversationDto
@@ -196,7 +191,8 @@ public class ChatController : ControllerBase
     [HttpPost("conversations/{id}/messages")]
     public async Task<ActionResult<MessageDto>> SendMessage(int id, [FromBody] SendMessageDto dto)
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
 
         var conversation = await _context.Conversations.FindAsync(id);
 
@@ -205,7 +201,7 @@ public class ChatController : ControllerBase
             return NotFound();
         }
 
-        if (conversation.BuyerId != userId && conversation.SellerId != userId)
+        if (conversation.BuyerId != userId.Value && conversation.SellerId != userId.Value)
         {
             return Forbid();
         }
@@ -213,7 +209,7 @@ public class ChatController : ControllerBase
         var message = new Message
         {
             ConversationId = id,
-            SenderId = userId,
+            SenderId = userId.Value,
             Content = dto.Content,
             SentAt = DateTime.UtcNow,
             IsRead = false
@@ -235,10 +231,16 @@ public class ChatController : ControllerBase
         };
         
         // Broadcast to SignalR group
-        // Use a generic logic: The receiver is the other party.
-        // We broadcast to the conversation group ID.
         await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", messageDto);
 
         return Ok(messageDto);
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
     }
 }

@@ -46,6 +46,7 @@ public class AnnonceListDto
     public string CommuneName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
+    public string? MainThumbnailUrl { get; set; }
     public bool IsExchange { get; set; }
     public bool IsGoodDeal { get; set; }
     public double? SellerAverageRating { get; set; }
@@ -71,8 +72,15 @@ public class AnnonceDetailDto
     public string Status { get; set; } = string.Empty;
     public bool IsGoodDeal { get; set; }
     public DateTime CreatedAt { get; set; }
-    public List<string> ImageUrls { get; set; } = new();
+    public List<ImageUrlDto> ImageUrls { get; set; } = new();
     public SellerInfoDto Seller { get; set; } = null!;
+}
+
+public class ImageUrlDto
+{
+    public string Url { get; set; } = string.Empty;
+    public string? ThumbnailSmall { get; set; }
+    public string? ThumbnailMedium { get; set; }
 }
 
 public class SellerInfoDto
@@ -94,6 +102,7 @@ public class MyAnnonceDto
     public string Category { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
+    public string? MainThumbnailUrl { get; set; }
     public bool IsGoodDeal { get; set; }
     public int? ModerationThreadId { get; set; }
     public DateTime CreatedAt { get; set; }

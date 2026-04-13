@@ -46,7 +46,8 @@ public class AnnonceFeedService : IAnnonceFeedService
 
         var randomRaw = await baseQuery
             .Where(a => !promotedIds.Contains(a.Id))
-            .OrderBy(_ => Guid.NewGuid())
+            .OrderByDescending(a => a.IsGoodDeal)
+            .ThenBy(a => Guid.NewGuid()) // Fix #20: Randomize within priority tiers
             .Take(remaining)
             .Select(a => new
             {
@@ -57,6 +58,7 @@ public class AnnonceFeedService : IAnnonceFeedService
                 CommuneName = a.Commune.Name,
                 Category = a.Category.Name,
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 a.IsExchange,
                 a.IsGoodDeal,
                 SellerId = a.UserId,
@@ -85,6 +87,7 @@ public class AnnonceFeedService : IAnnonceFeedService
                 CommuneName = a.CommuneName,
                 Category = a.Category,
                 MainImageUrl = a.MainImageUrl,
+                MainThumbnailUrl = a.MainThumbnailUrl,
                 IsExchange = a.IsExchange,
                 IsGoodDeal = a.IsGoodDeal,
                 SellerAverageRating = avg,

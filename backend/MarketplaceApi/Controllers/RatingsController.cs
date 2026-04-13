@@ -29,8 +29,9 @@ public class RatingsController : ControllerBase
     public async Task<ActionResult<SellerRatingSummaryDto>> CreateRating([FromBody] CreateRatingDto dto)
     {
         var raterId = GetCurrentUserId();
+        if (raterId == null) return Unauthorized();
 
-        if (dto.SellerId == raterId)
+        if (dto.SellerId == raterId.Value)
         {
             return BadRequest(new { message = "Vous ne pouvez pas vous noter vous-même" });
         }
@@ -41,7 +42,7 @@ public class RatingsController : ControllerBase
             return NotFound(new { message = "Vendeur introuvable" });
         }
 
-        await _ratingService.CreateOrUpdateRatingAsync(raterId, dto.SellerId, dto.Rating, dto.Comment);
+        await _ratingService.CreateOrUpdateRatingAsync(raterId.Value, dto.SellerId, dto.Rating, dto.Comment);
 
         var summary = await _ratingService.GetSellerSummaryAsync(dto.SellerId);
         return Ok(new SellerRatingSummaryDto
@@ -94,10 +95,11 @@ public class RatingsController : ControllerBase
         return Ok(dto);
     }
 
-    private int GetCurrentUserId()
+    private int? GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.Parse(userIdClaim ?? "0");
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
     }
 }
-

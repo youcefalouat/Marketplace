@@ -16,7 +16,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   final _codeController = TextEditingController();
   bool _codeSent = false;
   bool _isLoading = false;
-  String? _mockCode; // For dev: display the mock code
 
   @override
   void initState() {
@@ -49,12 +48,11 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await ApiService().sendVerificationCode(phone);
+      await ApiService().sendVerificationCode(phone);
       if (!mounted) return;
       setState(() {
         _codeSent = true;
         _isLoading = false;
-        _mockCode = result['mockCode']?.toString();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -181,30 +179,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
             ],
 
             if (_codeSent) ...[
-              // Mock code display (dev only)
-              if (_mockCode != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, color: Colors.amber),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '[DEV] Code: $_mockCode',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
               // Code input
               TextFormField(
                 controller: _codeController,
@@ -243,7 +217,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                         setState(() {
                           _codeSent = false;
                           _codeController.clear();
-                          _mockCode = null;
                         });
                       },
                 child: const Text('Renvoyer le code'),

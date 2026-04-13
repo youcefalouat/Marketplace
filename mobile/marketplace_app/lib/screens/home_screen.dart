@@ -237,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 28),
           _buildSectionHeader(
             title: 'Explorer par categorie',
-            subtitle: 'Sous-categories d abord, sinon categories finales',
+            subtitle: '',
           ),
           const SizedBox(height: 12),
           _buildCategorySection(),
@@ -529,10 +529,10 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(18),
                     ),
-                    child: annonce.mainImageUrl != null
+                    child: (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
                         ? CachedNetworkImage(
-                            imageUrl:
-                                ApiService.getImageUrl(annonce.mainImageUrl)!,
+                            imageUrl: ApiService.getImageUrl(
+                                annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
                             fit: BoxFit.cover,
                             placeholder: (_, __) => Container(
                               color: Colors.grey[200],

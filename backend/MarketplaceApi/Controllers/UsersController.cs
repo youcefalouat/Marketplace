@@ -26,11 +26,12 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<UserDto>> GetProfile()
     {
         var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
         
         var user = await _context.Users
             .Include(u => u.Wilaya)
             .Include(u => u.Commune)
-            .FirstOrDefaultAsync(u => u.Id == userId);
+            .FirstOrDefaultAsync(u => u.Id == userId.Value);
         
         if (user == null)
         {
@@ -47,7 +48,9 @@ public class UsersController : ControllerBase
             CommuneId = user.CommuneId,
             WilayaName = user.Wilaya.Name,
             CommuneName = user.Commune.Name,
-            Role = user.Role.ToString()
+            Role = user.Role.ToString(),
+            PhoneVerified = user.PhoneVerified,
+            EmailVerified = user.EmailVerified
         });
     }
     
@@ -58,8 +61,9 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<UserDto>> UpdateProfile([FromBody] UpdateProfileDto dto)
     {
         var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
         
-        var user = await _context.Users.FindAsync(userId);
+        var user = await _context.Users.FindAsync(userId.Value);
         if (user == null)
         {
             return NotFound();
@@ -96,13 +100,17 @@ public class UsersController : ControllerBase
             CommuneId = user.CommuneId,
             WilayaName = wilaya.Name,
             CommuneName = commune.Name,
-            Role = user.Role.ToString()
+            Role = user.Role.ToString(),
+            PhoneVerified = user.PhoneVerified,
+            EmailVerified = user.EmailVerified
         });
     }
     
-    private int GetCurrentUserId()
+    private int? GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.Parse(userIdClaim ?? "0");
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
     }
 }

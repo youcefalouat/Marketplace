@@ -27,11 +27,12 @@ public class ModerationController : ControllerBase
     public async Task<ActionResult<List<ModerationThreadSummaryDto>>> GetMyThreads()
     {
         var me = GetCurrentUserId();
+        if (me == null) return Unauthorized();
 
         var threads = await _context.ModerationThreads
             .AsNoTracking()
             .Include(t => t.Annonce).ThenInclude(a => a.Images)
-            .Where(t => t.OwnerId == me)
+            .Where(t => t.OwnerId == me.Value)
             .OrderByDescending(t => t.LastMessageAt)
             .Select(t => new ModerationThreadSummaryDto
             {
@@ -68,8 +69,9 @@ public class ModerationController : ControllerBase
         if (thread == null) return NotFound();
 
         var me = GetCurrentUserId();
+        if (me == null) return Unauthorized();
         var isAdmin = User.IsInRole("Admin");
-        if (!isAdmin && thread.OwnerId != me) return Forbid();
+        if (!isAdmin && thread.OwnerId != me.Value) return Forbid();
 
         return Ok(new ModerationThreadDto
         {
@@ -93,7 +95,7 @@ public class ModerationController : ControllerBase
                     Content = m.Content,
                     SentAt = m.SentAt,
                     IsFromAdmin = m.IsFromAdmin,
-                    IsMe = m.SenderId == me
+                    IsMe = m.SenderId == me.Value
                 })
                 .ToList()
         });
@@ -106,21 +108,22 @@ public class ModerationController : ControllerBase
     public async Task<ActionResult<ModerationMessageDto>> SendOwnerMessage(int threadId, [FromBody] SendModerationMessageDto dto)
     {
         var me = GetCurrentUserId();
+        if (me == null) return Unauthorized();
 
         var thread = await _context.ModerationThreads
             .Include(t => t.Annonce)
             .FirstOrDefaultAsync(t => t.Id == threadId);
 
         if (thread == null) return NotFound();
-        if (thread.OwnerId != me) return Forbid();
+        if (thread.OwnerId != me.Value) return Forbid();
         if (thread.ClosedAt != null) return BadRequest(new { message = "Conversation clôturée" });
 
-        var user = await _context.Users.FindAsync(me);
+        var user = await _context.Users.FindAsync(me.Value);
 
         var message = new ModerationMessage
         {
             ThreadId = threadId,
-            SenderId = me,
+            SenderId = me.Value,
             Content = dto.Content,
             SentAt = DateTime.UtcNow,
             IsFromAdmin = false
@@ -150,9 +153,11 @@ public class ModerationController : ControllerBase
         });
     }
 
-    private int GetCurrentUserId()
+    private int? GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.Parse(userIdClaim ?? "0");
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
     }
 }

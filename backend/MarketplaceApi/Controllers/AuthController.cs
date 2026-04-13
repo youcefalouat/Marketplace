@@ -13,11 +13,13 @@ public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ITokenService _tokenService;
+    private readonly ISmsService _smsService;
     
-    public AuthController(ApplicationDbContext context, ITokenService tokenService)
+    public AuthController(ApplicationDbContext context, ITokenService tokenService, ISmsService smsService)
     {
         _context = context;
         _tokenService = tokenService;
+        _smsService = smsService;
     }
     
     /// <summary>
@@ -212,19 +214,25 @@ public class AuthController : ControllerBase
 
         // Update phone number
         user.Phone = dto.Phone;
-        
-        // Generate 6-digit code
-        var code = new Random().Next(100000, 999999).ToString();
-        user.PhoneVerificationCode = code;
-        user.PhoneVerificationExpiry = DateTime.UtcNow.AddMinutes(10);
         user.PhoneVerified = false;
         
         await _context.SaveChangesAsync();
         
-        // MOCK: Log the code to console instead of sending real SMS
-        Console.WriteLine($"[MOCK SMS] Verification code for {dto.Phone}: {code}");
+        // Send real SMS
+        try
+        {
+            var success = await _smsService.SendVerificationCodeAsync(dto.Phone);
+            if (!success)
+            {
+                return BadRequest(new { message = "Erreur lors de l'envoi du code SMS (unknown)." });
+            }
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = $"Erreur Twilio: {ex.Message}" });
+        }
         
-        return Ok(new { message = "Code de vérification envoyé", mockCode = code });
+        return Ok(new { message = "Code de vérification envoyé" });
     }
     
     /// <summary>
@@ -244,13 +252,14 @@ public class AuthController : ControllerBase
             .FirstOrDefaultAsync(u => u.Id == userId);
         if (user == null) return NotFound();
 
-        if (user.PhoneVerificationCode != dto.Code)
-            return BadRequest(new { message = "Code incorrect" });
-        
-        if (user.PhoneVerificationExpiry < DateTime.UtcNow)
-            return BadRequest(new { message = "Code expiré. Veuillez renvoyer un nouveau code." });
+        var isCodeValid = await _smsService.VerifyCodeAsync(user.Phone, dto.Code);
+        if (!isCodeValid)
+        {
+            return BadRequest(new { message = "Code incorrect ou expiré" });
+        }
 
         user.PhoneVerified = true;
+        // Clean up our local fields if we still have them from legacy
         user.PhoneVerificationCode = null;
         user.PhoneVerificationExpiry = null;
         

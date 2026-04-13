@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -160,7 +162,7 @@ class AnnoncesProvider with ChangeNotifier {
     int? communeId,
     bool isExchange = false,
     bool showPhone = true,
-    required List<String> imagePaths,
+    required List<File> images,
   }) async {
     _isLoading = true;
     _error = null;
@@ -178,7 +180,7 @@ class AnnoncesProvider with ChangeNotifier {
         communeId: communeId,
         isExchange: isExchange,
         showPhone: showPhone,
-        imagePaths: imagePaths,
+        images: images,
       );
       _isLoading = false;
       notifyListeners();

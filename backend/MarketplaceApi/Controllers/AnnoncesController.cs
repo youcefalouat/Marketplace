@@ -15,13 +15,20 @@ public class AnnoncesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IBlobStorageService _blobStorage;
+    private readonly IImageProcessingService _imageProcessing;
     private readonly IRatingService _ratingService;
     private readonly IAnnonceFeedService _feedService;
     
-    public AnnoncesController(ApplicationDbContext context, IBlobStorageService blobStorage, IRatingService ratingService, IAnnonceFeedService feedService)
+    public AnnoncesController(
+        ApplicationDbContext context,
+        IBlobStorageService blobStorage,
+        IImageProcessingService imageProcessing,
+        IRatingService ratingService,
+        IAnnonceFeedService feedService)
     {
         _context = context;
         _blobStorage = blobStorage;
+        _imageProcessing = imageProcessing;
         _ratingService = ratingService;
         _feedService = feedService;
     }
@@ -32,7 +39,13 @@ public class AnnoncesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<AnnonceListDto>>> GetAnnonces([FromQuery] AnnonceFilterDto filter)
     {
+        // Fix #13: Clamp PageSize to prevent data dump
+        filter.PageSize = Math.Clamp(filter.PageSize, 1, 100);
+        filter.Page = Math.Max(filter.Page, 1);
+
+        // Fix #18: Add AsNoTracking for read-only listing query
         var query = _context.Annonces
+            .AsNoTracking()
             .Include(a => a.Images)
             .Include(a => a.Wilaya)
             .Include(a => a.Commune)
@@ -43,7 +56,7 @@ public class AnnoncesController : ControllerBase
         // Apply filters
         if (filter.CategoryId.HasValue)
         {
-            // Include category and all subcategories
+            // Fix #15: Load all categories in one query and traverse in-memory
             var categoryIds = await GetCategoryAndSubcategoryIds(filter.CategoryId.Value);
             query = query.Where(a => categoryIds.Contains(a.CategoryId));
         }
@@ -92,6 +105,7 @@ public class AnnoncesController : ControllerBase
                 CommuneName = a.Commune.Name,
                 Category = a.Category.Name,
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 IsExchange = a.IsExchange,
                 IsGoodDeal = a.IsGoodDeal,
                 SellerId = a.UserId,
@@ -119,6 +133,7 @@ public class AnnoncesController : ControllerBase
                 CommuneName = a.CommuneName,
                 Category = a.Category,
                 MainImageUrl = a.MainImageUrl,
+                MainThumbnailUrl = a.MainThumbnailUrl,
                 IsExchange = a.IsExchange,
                 IsGoodDeal = a.IsGoodDeal,
                 SellerAverageRating = avg,
@@ -178,10 +193,12 @@ public class AnnoncesController : ControllerBase
     public async Task<ActionResult<AnnonceDetailDto>> CreateAnnonce([FromForm] CreateAnnonceDto dto, [FromForm] List<IFormFile>? images)
     {
         var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
         var user = await _context.Users
             .Include(u => u.Wilaya)
             .Include(u => u.Commune)
-            .FirstOrDefaultAsync(u => u.Id == userId);
+            .FirstOrDefaultAsync(u => u.Id == userId.Value);
         
         if (user == null)
         {
@@ -216,7 +233,7 @@ public class AnnoncesController : ControllerBase
         
         var annonce = new Annonce
         {
-            UserId = userId,
+            UserId = userId.Value,
             Title = dto.Title,
             Description = dto.Description,
             Price = dto.Price,
@@ -234,20 +251,41 @@ public class AnnoncesController : ControllerBase
         _context.Annonces.Add(annonce);
         await _context.SaveChangesAsync();
         
-        // Upload images
+        // Process and upload images
         if (images != null && images.Any())
         {
             var order = 0;
+            var storedImages = new List<AnnonceImage>(); // Fix #3: Track stored images for cleanup
             foreach (var image in images)
             {
-                var imageUrl = await _blobStorage.UploadImageAsync(image);
-                var annonceImage = new AnnonceImage
+                try
                 {
-                    AnnonceId = annonce.Id,
-                    ImagePath = imageUrl,
-                    DisplayOrder = order++
-                };
-                _context.AnnonceImages.Add(annonceImage);
+                    using var processingResult = await _imageProcessing.ProcessImageAsync(image);
+                    var storageResult = await _blobStorage.StoreProcessedImageAsync(processingResult);
+                    
+                    var annonceImage = new AnnonceImage
+                    {
+                        AnnonceId = annonce.Id,
+                        ImagePath = storageResult.ImagePath,
+                        ThumbnailSmallPath = storageResult.ThumbnailSmallPath,
+                        ThumbnailMediumPath = storageResult.ThumbnailMediumPath,
+                        DisplayOrder = order++
+                    };
+                    _context.AnnonceImages.Add(annonceImage);
+                    storedImages.Add(annonceImage);
+                }
+                catch (ImageProcessingException ex)
+                {
+                    // Fix #3: Delete already-stored images before removing the annonce
+                    foreach (var stored in storedImages)
+                    {
+                        await _blobStorage.DeleteImageWithThumbnailsAsync(
+                            stored.ImagePath, stored.ThumbnailSmallPath, stored.ThumbnailMediumPath);
+                    }
+                    _context.Annonces.Remove(annonce);
+                    await _context.SaveChangesAsync();
+                    return BadRequest(new { message = ex.Message });
+                }
             }
             await _context.SaveChangesAsync();
         }
@@ -274,11 +312,13 @@ public class AnnoncesController : ControllerBase
     public async Task<ActionResult<List<MyAnnonceDto>>> GetMyAnnonces()
     {
         var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
         
         var annonces = await _context.Annonces
+            .AsNoTracking()
             .Include(a => a.Images)
             .Include(a => a.Category)
-            .Where(a => a.UserId == userId)
+            .Where(a => a.UserId == userId.Value)
             .OrderByDescending(a => a.CreatedAt)
             .Select(a => new MyAnnonceDto
             {
@@ -288,6 +328,7 @@ public class AnnoncesController : ControllerBase
                 Category = a.Category.Name,
                 Status = a.Status.ToString(),
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 IsGoodDeal = a.IsGoodDeal,
                 ModerationThreadId = _context.Conversations
                     .Where(t => t.AnnonceId == a.Id && t.IsModeration)
@@ -308,6 +349,7 @@ public class AnnoncesController : ControllerBase
     public async Task<IActionResult> DeleteAnnonce(int id)
     {
         var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
         
         var annonce = await _context.Annonces
             .Include(a => a.Images)
@@ -320,15 +362,16 @@ public class AnnoncesController : ControllerBase
         
         // Check ownership (unless admin)
         var isAdmin = User.IsInRole("Admin");
-        if (annonce.UserId != userId && !isAdmin)
+        if (annonce.UserId != userId.Value && !isAdmin)
         {
             return Forbid();
         }
         
-        // Delete images from storage
+        // Delete images and thumbnails from storage
         foreach (var image in annonce.Images)
         {
-            await _blobStorage.DeleteImageAsync(image.ImagePath);
+            await _blobStorage.DeleteImageWithThumbnailsAsync(
+                image.ImagePath, image.ThumbnailSmallPath, image.ThumbnailMediumPath);
         }
         
         _context.Annonces.Remove(annonce);
@@ -337,10 +380,13 @@ public class AnnoncesController : ControllerBase
         return NoContent();
     }
     
-    private int GetCurrentUserId()
+    // Fix #2: Return nullable int and Unauthorized instead of defaulting to 0
+    private int? GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.Parse(userIdClaim ?? "0");
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
     }
     
     private static AnnonceDetailDto MapToDetailDto(Annonce annonce, SellerRatingAggregate? sellerRating)
@@ -371,7 +417,12 @@ public class AnnoncesController : ControllerBase
             Status = annonce.Status.ToString(),
             IsGoodDeal = annonce.IsGoodDeal,
             CreatedAt = annonce.CreatedAt,
-            ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).ToList(),
+            ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => new ImageUrlDto
+            {
+                Url = i.ImagePath,
+                ThumbnailSmall = i.ThumbnailSmallPath,
+                ThumbnailMedium = i.ThumbnailMediumPath,
+            }).ToList(),
             Seller = new SellerInfoDto
             {
                 Id = annonce.UserId,
@@ -387,20 +438,29 @@ public class AnnoncesController : ControllerBase
         return dto;
     }
     
+    // Fix #15: Single query to load all categories, then traverse in-memory
     private async Task<List<int>> GetCategoryAndSubcategoryIds(int categoryId)
     {
-        var categoryIds = new List<int> { categoryId };
-        
-        var subcategories = await _context.Categories
-            .Where(c => c.ParentId == categoryId)
-            .Select(c => c.Id)
+        var allCategories = await _context.Categories
+            .AsNoTracking()
+            .Select(c => new { c.Id, c.ParentId })
             .ToListAsync();
-            
-        foreach (var subId in subcategories)
+        
+        var result = new List<int> { categoryId };
+        var queue = new Queue<int>();
+        queue.Enqueue(categoryId);
+        
+        while (queue.Count > 0)
         {
-            categoryIds.AddRange(await GetCategoryAndSubcategoryIds(subId));
+            var parentId = queue.Dequeue();
+            var children = allCategories.Where(c => c.ParentId == parentId).Select(c => c.Id);
+            foreach (var childId in children)
+            {
+                result.Add(childId);
+                queue.Enqueue(childId);
+            }
         }
         
-        return categoryIds.Distinct().ToList();
+        return result.Distinct().ToList();
     }
 }

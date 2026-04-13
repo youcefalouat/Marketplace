@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
+import 'package:http_parser/http_parser.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -25,7 +27,9 @@ class ApiService {
     if (relativePath == null || relativePath.isEmpty) return null;
     if (relativePath.startsWith('http')) return relativePath;
     final serverBase = baseUrl.replaceFirst('/api', '');
-    return '$serverBase/$relativePath';
+    // Fix #8: Strip leading slash to prevent double-slash in URL
+    final cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+    return '$serverBase/$cleanPath';
   }
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -499,7 +503,7 @@ class ApiService {
     int? communeId,
     bool isExchange = false,
     bool showPhone = true,
-    required List<String> imagePaths,
+    required List<File> images,
   }) async {
     final token = await getToken();
 
@@ -521,8 +525,27 @@ class ApiService {
     if (wilayaId != null) request.fields['wilayaId'] = wilayaId.toString();
     if (communeId != null) request.fields['communeId'] = communeId.toString();
 
-    for (final imagePath in imagePaths) {
-      request.files.add(await http.MultipartFile.fromPath('images', imagePath));
+    for (final file in images) {
+      if (!file.existsSync()) continue;
+      
+      final extension = file.path.split('.').last.toLowerCase();
+      MediaType? mediaType;
+      
+      if (extension == 'webp') {
+        mediaType = MediaType('image', 'webp');
+      } else if (extension == 'jpg' || extension == 'jpeg') {
+        mediaType = MediaType('image', 'jpeg');
+      } else if (extension == 'png') {
+        mediaType = MediaType('image', 'png');
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'images', 
+          file.path,
+          contentType: mediaType,
+        ),
+      );
     }
 
     final streamedResponse = await request.send();

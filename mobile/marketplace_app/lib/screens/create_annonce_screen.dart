@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:marketplace_app/services/image_compressor.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/annonces_provider.dart';
@@ -41,6 +42,9 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   bool _loadingCommunes = false;
 
   final List<String> _states = ['Neuf', 'Occasion'];
+
+  bool _isPickingImage = false;
+  bool _isSubmitting = false; // New state variable for submission
 
   @override
   void initState() {
@@ -167,8 +171,6 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
     super.dispose();
   }
 
-  bool _isPickingImage = false;
-
   Future<void> _pickImages() async {
     if (_isPickingImage) return;
 
@@ -277,6 +279,20 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
 
+    // Show loading state and compress images
+    setState(() => _isSubmitting = true);
+
+    List<File> finalImages;
+    try {
+      finalImages = await ImageCompressor.compressImages(_images);
+    } catch (e) {
+      if (mounted) setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur lors de la compression des images: $e')),
+      );
+      return;
+    }
+
     final success = await provider.createAnnonce(
       categoryId: finalCategoryId,
       title: _titleController.text.trim(),
@@ -288,26 +304,27 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       communeId: _selectedCommune?.id,
       isExchange: _isExchange,
       showPhone: _showPhone,
-      imagePaths: _images.map((f) => f.path).toList(),
+      images: finalImages,
     );
 
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Annonce créée ! En attente de validation.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(provider.error ?? 'Erreur lors de la création'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Annonce créée ! En attente de validation.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.error ?? 'Erreur lors de la création'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -591,17 +608,22 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                 return SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: provider.isLoading ? null : _submit,
+                    onPressed: (provider.isLoading || _isSubmitting) ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: provider.isLoading
+                    child: (provider.isLoading || _isSubmitting)
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Publier l\'annonce',
-                            style: TextStyle(fontSize: 16),
+                        : Text(
+                            _isSubmitting
+                                ? 'Compression & Envoi...'
+                                : 'Publier l\'annonce',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                   ),
                 );

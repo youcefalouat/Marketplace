@@ -692,10 +692,10 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  annonce.mainImageUrl != null
+                  (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
                       ? CachedNetworkImage(
                           imageUrl:
-                              ApiService.getImageUrl(annonce.mainImageUrl)!,
+                              ApiService.getImageUrl(annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           placeholder: (context, url) => Container(

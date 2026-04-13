@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 builder.Services.AddSignalR();
 
 // Add Blazor Server for Admin
@@ -24,9 +25,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo 
     { 
-        Title = "Marketplace Contrôlée API", 
+        Title = "Marketplace Controllee API", 
         Version = "v1",
-        Description = "API pour la marketplace contrôlée de produits d'électroménager, meubles, literie et décoration"
+        Description = "API pour la marketplace controlee de produits d electromenager, meubles, literie et decoration"
     });
     
     // JWT Authentication in Swagger
@@ -61,7 +62,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyWithAtLeast32Characters!";
+var secretKey = jwtSettings["SecretKey"]
+    ?? throw new InvalidOperationException("JwtSettings:SecretKey is not configured. Set it in appsettings.json or environment variables.");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -107,7 +109,13 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.Configure<FeaturedFeedOptions>(builder.Configuration.GetSection("FeaturedFeed"));
+builder.Services.Configure<ImageProcessingOptions>(builder.Configuration.GetSection("ImageProcessing"));
 builder.Services.AddScoped<IAnnonceFeedService, AnnonceFeedService>();
+builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
+
+// Configure Twilio
+builder.Services.Configure<MarketplaceApi.Models.TwilioSettings>(builder.Configuration.GetSection("Twilio"));
+builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -173,22 +181,30 @@ if (app.Environment.IsDevelopment())
     {
         // Use Alger (wilaya 16) and Alger Centre (commune 1 of Alger) as default
         var algerWilaya = db.Wilayas.FirstOrDefault(w => w.Code == "16");
-        var algerCommune = db.Communes.FirstOrDefault(c => c.WilayaId == algerWilaya!.Id);
+        var algerCommune = algerWilaya != null
+            ? db.Communes.FirstOrDefault(c => c.WilayaId == algerWilaya.Id)
+            : null;
         
-        db.Users.Add(new MarketplaceApi.Models.User
+        if (algerWilaya != null && algerCommune != null)
         {
-            Email = "admin@marketplace.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
-            Name = "Administrateur",
-            Phone = "0600000000",
-            WilayaId = algerWilaya!.Id,
-            CommuneId = algerCommune!.Id,
-            Role = MarketplaceApi.Models.UserRole.Admin,
-            CreatedAt = DateTime.UtcNow
-        });
-        db.SaveChanges();
+            db.Users.Add(new MarketplaceApi.Models.User
+            {
+                Email = "admin@marketplace.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
+                Name = "Administrateur",
+                Phone = "0600000000",
+                WilayaId = algerWilaya.Id,
+                CommuneId = algerCommune.Id,
+                Role = MarketplaceApi.Models.UserRole.Admin,
+                CreatedAt = DateTime.UtcNow
+            });
+            db.SaveChanges();
+        }
+        else
+        {
+            Console.WriteLine("WARNING: Could not seed admin user - Alger wilaya/commune not found.");
+        }
     }
 }
 
 app.Run();
-

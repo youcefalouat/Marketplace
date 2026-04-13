@@ -242,10 +242,10 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  annonce.mainImageUrl != null
+                  (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
                       ? CachedNetworkImage(
-                          imageUrl:
-                              ApiService.getImageUrl(annonce.mainImageUrl)!,
+                          imageUrl: ApiService.getImageUrl(
+                              annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
                             color: Colors.grey[200],
