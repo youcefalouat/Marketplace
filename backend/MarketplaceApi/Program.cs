@@ -168,7 +168,7 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
     
     // Seed wilayas and communes
     LocationSeedData.SeedLocations(db);
@@ -208,3 +208,4 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
+

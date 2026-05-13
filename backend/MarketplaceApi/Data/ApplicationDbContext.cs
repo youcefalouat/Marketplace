@@ -89,6 +89,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Category>(entity =>
         {
             entity.HasIndex(e => e.Slug).IsUnique();
+            entity.Property(e => e.ArName).HasMaxLength(255);
 
             entity.HasOne(c => c.Parent)
                 .WithMany(c => c.SubCategories)
