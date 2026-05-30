@@ -1,9 +1,16 @@
 @page "/admin/annonces/{Id:int}"
 @using MarketplaceApi.Data
+@using MarketplaceApi.DTOs
+@using MarketplaceApi.Hubs
 @using MarketplaceApi.Models
+@using MarketplaceApi.Services
+@using Microsoft.AspNetCore.SignalR
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
+@inject IHubContext<ChatHub> HubContext
+@inject INotificationService NotificationService
+@inject ChatConnectionManager ConnectionManager
 @rendermode InteractiveServer
 
 <PageTitle>Détail Annonce - Admin</PageTitle>
@@ -330,50 +337,168 @@ else
             await DbContext.SaveChangesAsync();
         }
 
-        DbContext.Messages.Add(new Message
+        var message = new Message
         {
             ConversationId = _moderationThread.Id,
             SenderId = adminId,
+            ReceiverId = _annonce.UserId,
             Content = _moderationDraft,
             SentAt = DateTime.UtcNow,
             IsRead = false
-        });
+        };
 
+        DbContext.Messages.Add(message);
         _moderationThread.LastMessageAt = DateTime.UtcNow;
         _annonce.Status = AnnonceStatus.UnderReview;
 
         _moderationDraft = "";
         await DbContext.SaveChangesAsync();
+
+        // Push real-time updates to the mobile app via SignalR
+        await PushRealtimeUpdatesAsync(_moderationThread, message, adminId);
+
         await LoadAnnonce();
     }
 
     private async Task SendModerationMessage()
     {
         if (_moderationThread == null) return;
+        if (_annonce == null) return;
         if (string.IsNullOrWhiteSpace(_moderationDraft)) return;
 
         var adminId = await DbContext.Users.Where(u => u.Role == UserRole.Admin).Select(u => u.Id).FirstOrDefaultAsync();
         if (adminId == 0) adminId = 1;
 
-        DbContext.Messages.Add(new Message
+        var message = new Message
         {
             ConversationId = _moderationThread.Id,
             SenderId = adminId,
+            ReceiverId = _annonce.UserId,
             Content = _moderationDraft,
             SentAt = DateTime.UtcNow,
             IsRead = false
-        });
+        };
 
+        DbContext.Messages.Add(message);
         _moderationThread.LastMessageAt = DateTime.UtcNow;
 
-        if (_annonce != null && _annonce.Status == AnnonceStatus.Pending)
+        if (_annonce.Status == AnnonceStatus.Pending)
         {
             _annonce.Status = AnnonceStatus.UnderReview;
         }
 
         _moderationDraft = "";
         await DbContext.SaveChangesAsync();
+
+        // Push real-time updates to the mobile app via SignalR
+        await PushRealtimeUpdatesAsync(_moderationThread, message, adminId);
+
         await LoadAnnonce();
+    }
+
+    /// <summary>
+    /// Push SignalR events so the mobile app receives the message instantly,
+    /// mirroring what ChatController.PushMessageAndConversationUpdatesAsync does.
+    /// </summary>
+    private async Task PushRealtimeUpdatesAsync(Conversation conversation, Message message, int adminId)
+    {
+        var receiverId = message.ReceiverId;
+
+        // 1. Push ReceiveMessage to the receiver (seller) so their chat screen updates instantly
+        var receiverDto = new MessageDto
+        {
+            Id = message.Id,
+            ConversationId = message.ConversationId,
+            SenderId = message.SenderId,
+            ReceiverId = message.ReceiverId,
+            Content = message.Content,
+            SentAt = message.SentAt,
+            IsRead = message.IsRead,
+            ReadAt = message.ReadAt,
+            IsMe = false // From the receiver's perspective, this is not their message
+        };
+
+        await HubContext.Clients.Group(ChatHub.GetUserGroupName(receiverId))
+            .SendAsync("ReceiveMessage", receiverDto);
+
+        // 2. Push ConversationUpdated so the conversation list updates
+        var conversationDto = await BuildConversationDtoForUser(conversation.Id, receiverId);
+        if (conversationDto != null)
+        {
+            await HubContext.Clients.Group(ChatHub.GetUserGroupName(receiverId))
+                .SendAsync("ConversationUpdated", conversationDto);
+        }
+
+        // 3. Push UnreadCountUpdated so the badge count updates
+        var unreadSummary = await BuildUnreadSummaryForUser(receiverId);
+        await HubContext.Clients.Group(ChatHub.GetUserGroupName(receiverId))
+            .SendAsync("UnreadCountUpdated", unreadSummary);
+
+        // 4. Send push notification via the notification service
+        var adminUser = await DbContext.Users.FindAsync(adminId);
+        var senderName = adminUser?.Name ?? "Administrateur";
+        await NotificationService.SendMessageNotificationAsync(receiverId, receiverDto, senderName);
+    }
+
+    private async Task<ConversationDto?> BuildConversationDtoForUser(int conversationId, int userId)
+    {
+        return await DbContext.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId)
+            .Select(c => new ConversationDto
+            {
+                Id = c.Id,
+                AnnonceId = c.AnnonceId,
+                AnnonceTitle = c.Annonce.Title,
+                AnnonceImage = c.Annonce.Images
+                    .OrderBy(i => i.DisplayOrder)
+                    .Select(i => i.ThumbnailMediumPath ?? i.ImagePath)
+                    .FirstOrDefault() ?? string.Empty,
+                AnnoncePrice = c.Annonce.Price,
+                AnnonceCurrency = "DA",
+                AnnonceOwnerId = c.Annonce.UserId,
+                AnnonceCategoryId = c.Annonce.CategoryId,
+                AnnonceCategoryName = c.Annonce.Category.Name,
+                AnnonceCategoryArName = c.Annonce.Category.ArName,
+                AnnonceStatus = c.Annonce.Status.ToString(),
+                InterlocutorId = c.BuyerId == userId ? c.Seller.Id : c.Buyer.Id,
+                InterlocutorName = c.BuyerId == userId ? c.Seller.Name : c.Buyer.Name,
+                LastMessageAt = c.LastMessageAt,
+                LastMessageContent = c.Messages
+                    .OrderByDescending(m => m.Id)
+                    .Select(m => m.Content)
+                    .FirstOrDefault() ?? string.Empty,
+                LastMessageSenderId = c.Messages
+                    .OrderByDescending(m => m.Id)
+                    .Select(m => (int?)m.SenderId)
+                    .FirstOrDefault(),
+                UnreadCount = c.Messages.Count(m => m.ReceiverId == userId && !m.IsRead),
+                HasUnreadMessages = c.Messages.Any(m => m.ReceiverId == userId && !m.IsRead),
+                IsModeration = c.IsModeration,
+                IsInterlocutorOnline = ConnectionManager.IsUserOnline(
+                    c.BuyerId == userId ? c.SellerId : c.BuyerId)
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<UnreadSummaryDto> BuildUnreadSummaryForUser(int userId)
+    {
+        var conversations = await DbContext.Messages
+            .AsNoTracking()
+            .Where(m => m.ReceiverId == userId && !m.IsRead)
+            .GroupBy(m => m.ConversationId)
+            .Select(g => new UnreadConversationCountDto
+            {
+                ConversationId = g.Key,
+                Count = g.Count()
+            })
+            .ToListAsync();
+
+        return new UnreadSummaryDto
+        {
+            TotalUnread = conversations.Sum(c => c.Count),
+            Conversations = conversations
+        };
     }
 
     private async Task SaveEstimate()
