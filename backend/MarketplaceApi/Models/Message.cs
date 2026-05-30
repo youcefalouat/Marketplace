@@ -14,15 +14,23 @@ public class Message
     public int SenderId { get; set; }
 
     [Required]
+    public int ReceiverId { get; set; }
+
+    [Required]
     public string Content { get; set; } = string.Empty;
 
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
 
     public bool IsRead { get; set; } = false;
 
+    public DateTime? ReadAt { get; set; }
+
     // Navigation properties
     public Conversation Conversation { get; set; } = null!;
     
     [ForeignKey("SenderId")]
     public User Sender { get; set; } = null!;
+
+    [ForeignKey("ReceiverId")]
+    public User Receiver { get; set; } = null!;
 }

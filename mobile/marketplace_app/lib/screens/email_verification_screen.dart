@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({super.key});
@@ -37,9 +38,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         _mockCode = result['mockCode']?.toString();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Code de vérification envoyé sur votre email !'),
-          backgroundColor: Colors.green,
+        SnackBar(
+            content: Text('Code de vérification envoyé sur votre email !'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
     } catch (e) {
@@ -48,7 +49,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -58,9 +59,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez entrer le code'),
-          backgroundColor: Colors.red,
+        SnackBar(
+            content: Text('Veuillez entrer le code'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -78,9 +79,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       authProvider.setUser(updatedUser);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email vérifié avec succès !'),
-          backgroundColor: Colors.green,
+        SnackBar(
+            content: Text('Email vérifié avec succès !'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
       Navigator.pop(context, true); // Return true = verified
@@ -90,7 +91,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -125,7 +126,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             Text(
               'Un code de vérification sera envoyé à votre adresse email.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).extension<AppColors>()!.textSecondary,
                   ),
               textAlign: TextAlign.center,
             ),
@@ -156,7 +157,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
                       : const Text('Envoyer le code',
                           style: TextStyle(fontSize: 16)),
                 ),
@@ -170,13 +171,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
+                    color: Theme.of(context).extension<AppColors>()!.warningMuted,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber),
+                    border: Border.all(color: Theme.of(context).extension<AppColors>()!.warning),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.amber),
+                      Icon(Icons.info_outline, color: Theme.of(context).extension<AppColors>()!.warning),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -213,7 +214,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
                       : const Text('Vérifier', style: TextStyle(fontSize: 16)),
                 ),
               ),

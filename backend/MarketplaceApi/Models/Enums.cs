@@ -19,5 +19,8 @@ public enum AnnonceStatus
     Pending = 0,
     Approved = 1,
     Rejected = 2,
-    UnderReview = 3
+    UnderReview = 3,
+    Sold = 4,
+    Archived = 5,
+    Deleted = 6
 }

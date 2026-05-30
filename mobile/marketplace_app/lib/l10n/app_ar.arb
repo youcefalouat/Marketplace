@@ -1,0 +1,145 @@
+{
+  "@@locale": "ar",
+  "appTitle": "السوق المراقب",
+  "myProfile": "حسابي",
+  "language": "اللغة",
+  "darkMode": "الوضع الداكن",
+  "saveTheme": "حفظ المظهر على هذا الجهاز",
+  "home": "الرئيسية",
+  "search": "بحث",
+  "publish": "نشر",
+  "messages": "الرسائل",
+  "marketplaceListing": "إعلان Marketplace",
+  "viewDetails": "عرض التفاصيل",
+  "moreOptions": "خيارات أكثر",
+  "listingAvailable": "الإعلان متاح",
+  "noMessages": "لا توجد رسائل",
+  "sendFirstMessage": "أرسل أول رسالة",
+  "chatMessageHint": "اكتب رسالة...",
+  "startConversation": "ابدأ المحادثة",
+  "profile": "البروفايل",
+  "myAnnonces": "إعلاناتي",
+  "logout": "تسجيل الخروج",
+  "cancel": "إلغاء",
+  "save": "حفظ",
+  "login": "تسجيل الدخول",
+  "discover": "اكتشف",
+  "exploreByCategory": "استكشف حسب الفئة",
+  "noAnnoncesAvailable": "لا توجد إعلانات متاحة حاليا.",
+  "noCategoriesAvailable": "لا توجد فئات متاحة.",
+  "reload": "إعادة تحميل",
+  "viewAnnonces": "عرض الإعلانات",
+  "goodDeal": "صفقة جيدة",
+  "price": "{amount} د.ج",
+  "@price": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "call": "اتصل",
+  "contact": "تواصل",
+  "descriptionTitle": "الوصف",
+  "seller": "البائع",
+  "rateSeller": "تقييم هذا البائع",
+  "ratingSentSuccess": "تم إرسال التقييم بنجاح!",
+  "cannotOpenPhoneApp": "تعذر فتح تطبيق الهاتف",
+  "mustBeLoggedInToMessage": "يجب تسجيل الدخول لإرسال رسالة",
+  "cannotChatWithSelf": "لا يمكنك الدردشة على إعلانك الخاص",
+  "mustBeLoggedInToRate": "يجب تسجيل الدخول لتقييم البائع",
+  "retry": "إعادة المحاولة",
+  "send": "إرسال",
+  "commentOptional": "تعليق (اختياري)",
+  "rate": "تقييم {name}",
+  "@rate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filters": "الفلاتر",
+  "reset": "إعادة ضبط",
+  "category": "الفئة",
+  "allCategories": "كل الفئات",
+  "all": "الكل",
+  "subCategory": "الفئة الفرعية",
+  "wilayas": "الولايات",
+  "selectWilayas": "اختر الولايات",
+  "allWilayas": "كل الولايات",
+  "communes": "البلديات",
+  "selectCommunes": "اختر البلديات",
+  "allCommunes": "كل البلديات",
+  "selectedCount": "{count} محددة",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "min": "الأدنى",
+  "max": "الأقصى",
+  "apply": "تطبيق",
+  "searchHint": "ابحث...",
+  "noAnnoncesFound": "لم يتم العثور على إعلانات",
+  "newAnnonce": "إعلان جديد",
+  "photosCount": "الصور ({count}/5)",
+  "@photosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mainCategory": "الفئة الرئيسية",
+  "condition": "الحالة",
+  "newCondition": "جديد",
+  "usedCondition": "مستعمل",
+  "title": "العنوان",
+  "priceDa": "السعر (د.ج)",
+  "invalidPrice": "السعر غير صالح",
+  "exchangePossible": "إمكانية التبادل",
+  "exchangeSubtitle": "يمكن استبدال هذا المنتج بمنتج آخر",
+  "phone": "الهاتف",
+  "gallery": "المعرض",
+  "photo": "صورة",
+  "showPhone": "إظهار رقمي",
+  "showPhoneSubtitle": "عند تعطيله، لن يتمكن المستخدمون من الاتصال بك مباشرة",
+  "wilaya": "الولاية",
+  "commune": "البلدية",
+  "publishAnnonce": "نشر الإعلان",
+  "compressingAndSending": "ضغط وإرسال...",
+  "maxFivePhotos": "الحد الأقصى 5 صور",
+  "addAtLeastOnePhoto": "يرجى إضافة صورة واحدة على الأقل",
+  "selectCategoryValidation": "يرجى اختيار فئة",
+  "selectSubCategoryValidation": "يرجى اختيار فئة فرعية",
+  "enterTitle": "يرجى إدخال عنوان",
+  "titleMinLength": "يجب أن يحتوي العنوان على 5 أحرف على الأقل",
+  "enterDescription": "يرجى إدخال وصف",
+  "descriptionMinLength": "يجب أن يحتوي الوصف على 20 حرفا على الأقل",
+  "enterPrice": "يرجى إدخال السعر",
+  "enterPhone": "يرجى إدخال رقم الهاتف",
+  "annonceCreatedPending": "تم إنشاء الإعلان! في انتظار المراجعة.",
+  "creationError": "خطأ أثناء إنشاء الإعلان",
+  "imageCompressionError": "خطأ أثناء ضغط الصور: {error}",
+  "@imageCompressionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "verificationRequired": "التحقق مطلوب",
+  "phoneVerificationRequiredMessage": "يجب التحقق من رقم هاتفك قبل نشر إعلان.",
+  "verify": "تحقق",
+  "errorWithMessage": "خطأ: {error}",
+  "@errorWithMessage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}

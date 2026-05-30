@@ -21,4 +21,5 @@ RUN dotnet publish "MarketplaceApi.csproj" -c Release -o /app/publish /p:UseAppH
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p /app/wwwroot/images /app/wwwroot/uploads
 ENTRYPOINT ["dotnet", "MarketplaceApi.dll"]

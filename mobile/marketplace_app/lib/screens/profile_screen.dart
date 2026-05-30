@@ -3,6 +3,10 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../l10n/app_localizations.dart';
+import '../providers/locale_provider.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_colors.dart';
 import 'login_screen.dart';
 import 'admin_categories_screen.dart';
 import 'email_verification_screen.dart';
@@ -113,9 +117,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedWilaya == null || _selectedCommune == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Veuillez sélectionner une wilaya et une commune'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -133,16 +137,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (success) {
         setState(() => _isEditing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Profil mis à jour'),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(authProvider.error ?? 'Erreur'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
           ),
         );
       }
@@ -183,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mon profil'),
+        title: Text(AppLocalizations.of(context)!.myProfile),
         actions: [
           if (_isEditing)
             TextButton(
@@ -204,231 +208,273 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return const Center(child: Text('Non connecté'));
           }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  // Avatar
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor:
-                        Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                    child: Icon(
-                      Icons.person,
-                      size: 50,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Email (non-editable)
-                  Text(
-                    user.email,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Email verification status
-                  if (user.provider == null || user.provider!.isEmpty) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          user.emailVerified
-                              ? Icons.verified
-                              : Icons.warning_amber_rounded,
-                          size: 16,
-                          color:
-                              user.emailVerified ? Colors.green : Colors.orange,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          user.emailVerified
-                              ? 'Email vérifié'
-                              : 'Email non vérifié',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: user.emailVerified
-                                ? Colors.green
-                                : Colors.orange,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (!user.emailVerified) ...[
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: () async {
-                              final result = await Navigator.push<bool>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const EmailVerificationScreen(),
-                                ),
-                              );
-                              if (result == true && mounted) {
-                                setState(() {});
-                              }
-                            },
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Vérifier',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 32),
-
-                  // Name field
-                  TextFormField(
-                    controller: _nameController,
-                    enabled: _isEditing,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: 'Nom',
-                      prefixIcon: const Icon(Icons.person_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre nom';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Phone field
-                  TextFormField(
-                    controller: _phoneController,
-                    enabled: _isEditing,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: 'Téléphone',
-                      prefixIcon: const Icon(Icons.phone_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre téléphone';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Wilaya dropdown
-                  _loadingWilayas
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<Wilaya>(
-                          value: _selectedWilaya,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: 'Wilaya',
-                            prefixIcon:
-                                const Icon(Icons.location_city_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: _wilayas
-                              .map((w) => DropdownMenuItem(
-                                    value: w,
-                                    child: Text('${w.code} - ${w.name}'),
-                                  ))
-                              .toList(),
-                          onChanged: !_isEditing
-                              ? null
-                              : (wilaya) {
-                                  setState(() => _selectedWilaya = wilaya);
-                                  if (wilaya != null) _loadCommunes(wilaya.id);
-                                },
-                        ),
-                  const SizedBox(height: 16),
-
-                  // Commune dropdown
-                  _loadingCommunes
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<Commune>(
-                          value: _selectedCommune,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: 'Commune',
-                            prefixIcon: const Icon(Icons.location_on_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: _communes
-                              .map((c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(c.name),
-                                  ))
-                              .toList(),
-                          onChanged: !_isEditing || _selectedWilaya == null
-                              ? null
-                              : (commune) {
-                                  setState(() => _selectedCommune = commune);
-                                },
-                        ),
-                  const SizedBox(height: 32),
-
-                  if (_isEditing)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: auth.isLoading ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: auth.isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white)
-                            : const Text('Enregistrer'),
-                      ),
-                    )
-                  else ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const MyAnnoncesScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.list_alt),
-                        label: const Text('Mes annonces'),
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+          return SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    // Avatar
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor:
+                          Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      child: Icon(
+                        Icons.person,
+                        size: 50,
+                        color: Theme.of(context).primaryColor,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (user.role == 'Admin') ...[
+
+                    // Email (non-editable)
+                    Text(
+                      user.email,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context)
+                                .extension<AppColors>()!
+                                .textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Email verification status
+                    if (user.provider == null || user.provider!.isEmpty) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            user.emailVerified
+                                ? Icons.verified
+                                : Icons.warning_amber_rounded,
+                            size: 16,
+                            color: user.emailVerified
+                                ? Theme.of(context)
+                                    .extension<AppColors>()!
+                                    .accent
+                                : Theme.of(context)
+                                    .extension<AppColors>()!
+                                    .warning,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.emailVerified
+                                ? 'Email vérifié'
+                                : 'Email non vérifié',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: user.emailVerified
+                                  ? Theme.of(context)
+                                      .extension<AppColors>()!
+                                      .accent
+                                  : Theme.of(context)
+                                      .extension<AppColors>()!
+                                      .warning,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (!user.emailVerified) ...[
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () async {
+                                final result = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const EmailVerificationScreen(),
+                                  ),
+                                );
+                                if (result == true && mounted) {
+                                  setState(() {});
+                                }
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Vérifier',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 32),
+
+                    // Name field
+                    TextFormField(
+                      controller: _nameController,
+                      enabled: _isEditing,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        labelText: 'Nom',
+                        prefixIcon: const Icon(Icons.person_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Veuillez entrer votre nom';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Phone field
+                    TextFormField(
+                      controller: _phoneController,
+                      enabled: _isEditing,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Téléphone',
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Veuillez entrer votre téléphone';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Wilaya dropdown
+                    _loadingWilayas
+                        ? const Center(child: CircularProgressIndicator())
+                        : DropdownButtonFormField<Wilaya>(
+                            initialValue: _selectedWilaya,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Wilaya',
+                              prefixIcon:
+                                  const Icon(Icons.location_city_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: _wilayas
+                                .map((w) => DropdownMenuItem(
+                                      value: w,
+                                      child: Text('${w.code} - ${w.name}'),
+                                    ))
+                                .toList(),
+                            onChanged: !_isEditing
+                                ? null
+                                : (wilaya) {
+                                    setState(() => _selectedWilaya = wilaya);
+                                    if (wilaya != null)
+                                      _loadCommunes(wilaya.id);
+                                  },
+                          ),
+                    const SizedBox(height: 16),
+
+                    // Commune dropdown
+                    _loadingCommunes
+                        ? const Center(child: CircularProgressIndicator())
+                        : DropdownButtonFormField<Commune>(
+                            initialValue: _selectedCommune,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Commune',
+                              prefixIcon:
+                                  const Icon(Icons.location_on_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: _communes
+                                .map((c) => DropdownMenuItem(
+                                      value: c,
+                                      child: Text(c.name),
+                                    ))
+                                .toList(),
+                            onChanged: !_isEditing || _selectedWilaya == null
+                                ? null
+                                : (commune) {
+                                    setState(() => _selectedCommune = commune);
+                                  },
+                          ),
+                    const SizedBox(height: 24),
+
+                    Card(
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            value: context.watch<ThemeProvider>().isDarkMode,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            secondary: const Icon(Icons.dark_mode_outlined),
+                            title: Text(AppLocalizations.of(context)!.darkMode),
+                            subtitle:
+                                Text(AppLocalizations.of(context)!.saveTheme),
+                            onChanged: (value) {
+                              context.read<ThemeProvider>().setDarkMode(value);
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            leading: const Icon(Icons.language),
+                            title: Text(AppLocalizations.of(context)!.language),
+                            trailing: DropdownButton<String>(
+                              value: context
+                                  .watch<LocaleProvider>()
+                                  .locale
+                                  .languageCode,
+                              underline: const SizedBox(),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'fr', child: Text('Français')),
+                                DropdownMenuItem(
+                                    value: 'ar', child: Text('العربية')),
+                              ],
+                              onChanged: (value) {
+                                if (value != null) {
+                                  context
+                                      .read<LocaleProvider>()
+                                      .setLocale(Locale(value));
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    if (_isEditing)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: auth.isLoading ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: auth.isLoading
+                              ? const CircularProgressIndicator()
+                              : const Text('Enregistrer'),
+                        ),
+                      )
+                    else ...[
                       SizedBox(
                         width: double.infinity,
                         height: 50,
@@ -437,15 +483,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    const AdminCategoriesScreen(),
+                                builder: (context) => const MyAnnoncesScreen(),
                               ),
                             );
                           },
-                          icon: const Icon(Icons.category),
-                          label: const Text('Gestion des catégories (Admin)'),
+                          icon: const Icon(Icons.list_alt),
+                          label: const Text('Mes annonces'),
                           style: FilledButton.styleFrom(
-                            backgroundColor: Colors.blueGrey,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -453,27 +497,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                    ],
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: _logout,
-                        icon: const Icon(Icons.logout, color: Colors.red),
-                        label: const Text(
-                          'Déconnexion',
-                          style: TextStyle(color: Colors.red),
+                      if (user.role == 'Admin') ...[
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const AdminCategoriesScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.category),
+                            label: const Text('Gestion des catégories (Admin)'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Theme.of(context)
+                                  .extension<AppColors>()!
+                                  .textTertiary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: 16),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: _logout,
+                          icon: Icon(Icons.logout,
+                              color: Theme.of(context)
+                                  .extension<AppColors>()!
+                                  .error),
+                          label: Text(
+                            'Déconnexion',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .extension<AppColors>()!
+                                    .error),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                                color: Theme.of(context)
+                                    .extension<AppColors>()!
+                                    .error),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           );

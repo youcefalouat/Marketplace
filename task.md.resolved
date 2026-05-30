@@ -1,0 +1,35 @@
+# Execution Tasks
+
+## 1. Annonce Deletion (Status-Based Soft Delete)
+- `[x]` Update `Enums.cs` to add `Sold`, `Archived`, `Deleted` to `AnnonceStatus`.
+- `[x]` Update `Annonce.cs` to add `DeletedAt` and `DeletedBy`.
+- `[x]` Update `AnnonceDtos.cs` to include a simpler `DeleteAnnonceDto` requiring the new status.
+- `[x]` Update `AnnoncesController.cs` with `POST /annonces/{id}/delete` mapping to the new statuses.
+- `[x]` Generate Entity Framework migration.
+- `[x]` Update Flutter `my_annonces_screen.dart` with dialog and API hook.
+- `[x]` Update Flutter `api_service.dart` `deleteAnnonce` signature.
+
+## 2. Real-Time Chat & Discussion Creation (Lazy)
+- `[x]` Update `ChatHub.cs` to use User ID groups (`user_{id}`).
+- `[x]` Update `ChatController.cs` for lazy creation.
+- `[x]` Update Flutter `chat_provider.dart` to connect at application root.
+- `[x]` Update `chat_screen.dart` to handle pending conversation creation and fix keyboard lag (Feature 4).
+- `[x]` Update `chat_service.dart` with automatic reconnection and lazy creation API changes.
+
+## 3. Dark Mode
+- `[x]` Create `ThemeProvider` locally persisting with SharedPreferences.
+- `[x]` Wire `ThemeProvider` in `main.dart`.
+- `[x]` Update `profile_screen.dart` with theme toggle.
+
+## 4. Notifications System
+- `[x]` Create backend `INotificationService` handling SignalR vs FCM dual checks.
+- `[x]` Add FCM backend client package/logic.
+- `[x]` Update Flutter app with `firebase_messaging` to receive FCM.
+
+## 5. UI Fixes
+- `[x]` Fix `SafeArea` cropping on navigation bars.
+- `[x]` Wrap `StarRating` in `Flexible` + `FittedBox`.
+
+## 6. Network Stability
+- `[x]` Centralize HTTP client in Flutter `api_service.dart` with retries.
+- `[x]` Improve ASP.NET limits in `Program.cs`.

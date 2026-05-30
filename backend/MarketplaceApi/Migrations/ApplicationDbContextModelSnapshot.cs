@@ -70,6 +70,12 @@ namespace MarketplaceApi.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -268,9 +274,17 @@ namespace MarketplaceApi.Migrations
 
                     b.HasIndex("AnnonceId");
 
+                    b.HasIndex("AnnonceId", "BuyerId", "SellerId", "IsModeration");
+
                     b.HasIndex("BuyerId");
 
+                    b.HasIndex("BuyerId", "LastMessageAt");
+
+                    b.HasIndex("LastMessageAt");
+
                     b.HasIndex("SellerId");
+
+                    b.HasIndex("SellerId", "LastMessageAt");
 
                     b.ToTable("Conversations");
                 });
@@ -293,6 +307,12 @@ namespace MarketplaceApi.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReceiverId")
+                        .HasColumnType("int");
+
                     b.Property<int>("SenderId")
                         .HasColumnType("int");
 
@@ -302,6 +322,10 @@ namespace MarketplaceApi.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConversationId");
+
+                    b.HasIndex("ConversationId", "SentAt");
+
+                    b.HasIndex("ReceiverId", "IsRead");
 
                     b.HasIndex("SenderId");
 
@@ -405,6 +429,10 @@ namespace MarketplaceApi.Migrations
 
                     b.Property<bool>("EmailVerified")
                         .HasColumnType("bit");
+
+                    b.Property<string>("FcmToken")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -651,7 +679,15 @@ namespace MarketplaceApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MarketplaceApi.Models.User", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Conversation");
+
+                    b.Navigation("Receiver");
 
                     b.Navigation("Sender");
                 });
@@ -773,4 +809,3 @@ namespace MarketplaceApi.Migrations
         }
     }
 }
-

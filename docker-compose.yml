@@ -6,9 +6,9 @@ services:
     container_name: marketplace-db
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=YourStrong!Passw0rd
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
     ports:
-      - "1433:1433"
+      - "${MARKETPLACE_DB_PORT:-1433}:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
 
@@ -19,10 +19,21 @@ services:
       context: ./backend/MarketplaceApi
       dockerfile: Dockerfile
     environment:
-      - ConnectionStrings__DefaultConnection=Server=marketplace-db;Database=MarketplaceDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
+      - ConnectionStrings__DefaultConnection=Server=marketplace-db;Database=${MARKETPLACE_DB_NAME:-MarketplaceDb};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
       - ASPNETCORE_URLS=http://+:8080
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER:-MarketplaceApi}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-MarketplaceApp}
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION_STRING:-}
+      - AzureStorage__BaseUrl=${AZURE_STORAGE_BASE_URL:-}
+      - Twilio__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - Twilio__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - Twilio__VerificationServiceSid=${TWILIO_VERIFICATION_SERVICE_SID:-}
     ports:
-      - "5000:8080"
+      - "${MARKETPLACE_API_PORT:-5000}:8080"
+    volumes:
+      - ./backend/MarketplaceApi/wwwroot/images:/app/wwwroot/images
+      - ./backend/MarketplaceApi/wwwroot/uploads:/app/wwwroot/uploads
     depends_on:
       - marketplace-db
 

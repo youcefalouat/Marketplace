@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 
 class ModerationThreadScreen extends StatefulWidget {
   final int threadId;
@@ -121,7 +122,7 @@ class _ModerationThreadScreenState extends State<ModerationThreadScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 56, color: Colors.grey),
+              const Icon(Icons.error_outline, size: 56, color: Color(0xFF6B7280)),
               const SizedBox(height: 12),
               Text(
                 _error!,
@@ -171,13 +172,15 @@ class _ModerationThreadScreenState extends State<ModerationThreadScreen> {
         ? 'En révision'
         : thread.annonceStatus;
 
+    final colors = Theme.of(context).extension<AppColors>()!;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: colors.surface,
         border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200),
+          bottom: BorderSide(color: colors.border),
         ),
       ),
       child: Column(
@@ -185,15 +188,16 @@ class _ModerationThreadScreenState extends State<ModerationThreadScreen> {
         children: [
           Text(
             thread.annonceTitle,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 16,
+              color: colors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             thread.isClosed ? '$statusLabel • clôturé' : statusLabel,
-            style: TextStyle(color: Colors.grey[700]),
+            style: TextStyle(color: colors.textSecondary),
           ),
         ],
       ),
@@ -202,8 +206,9 @@ class _ModerationThreadScreenState extends State<ModerationThreadScreen> {
 
   Widget _buildMessageBubble(ModerationMessage message) {
     final isMe = message.isMe;
-    final background = isMe ? Colors.blue.shade600 : Colors.grey.shade200;
-    final foreground = isMe ? Colors.white : Colors.black87;
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final background = isMe ? colors.primary : colors.surfaceElevated1;
+    final foreground = isMe ? colors.textOnPrimary : colors.textPrimary;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -221,7 +226,7 @@ class _ModerationThreadScreenState extends State<ModerationThreadScreen> {
             Text(
               message.isFromAdmin ? 'Admin' : message.senderName,
               style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.grey[700],
+                color: isMe ? colors.textOnPrimary.withValues(alpha: 0.7) : colors.textTertiary,
                 fontWeight: FontWeight.w700,
                 fontSize: 12,
               ),

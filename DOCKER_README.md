@@ -11,16 +11,52 @@ This project supports Docker for both the Backend API and the Mobile App build e
 To run the Backend API and SQL Server database together:
 
 1.  Open a terminal in the project root (where `docker-compose.yml` is located).
-2.  Run the following command:
+2.  Create your local environment file:
     ```bash
-    docker-compose up --build
+    cp .env.example .env
     ```
-3.  The services will start:
-    - **Database**: Port `1433`
-    - **API**: Port `5000` (accessible at `http://localhost:5000/api`)
+3.  Update `.env` with your database password, JWT secret, and optional Twilio / Azure values.
+4.  Run the following command:
+    ```bash
+    docker compose up --build
+    ```
+5.  The services will start:
+    - **Database**: Port from `MARKETPLACE_DB_PORT`
+    - **API**: Port from `MARKETPLACE_API_PORT`
 
 ### Connection Strings
-The `docker-compose.yml` automatically configures the API to connect to the SQL Server container. No manual change in `appsettings.json` is needed.
+The `docker-compose.yml` automatically configures the API to connect to the SQL Server container through environment variables. No manual change in `appsettings.json` is needed when you move to another machine or VPS.
+
+### Local image storage without Azure
+If `AZURE_STORAGE_CONNECTION_STRING` is empty, uploaded annonce images are stored locally under:
+
+```bash
+backend/MarketplaceApi/wwwroot/images/YYYY/MM/
+```
+
+Thumbnails are stored in the matching `thumbs` subfolder. In Docker, these folders are bind-mounted to `/app/wwwroot/images` and `/app/wwwroot/uploads` inside the API container so uploads remain visible on the VPS and survive container rebuilds.
+
+On a VPS deployment from the project root, you can check uploaded files with:
+
+```bash
+ls -lah backend/MarketplaceApi/wwwroot/images
+docker exec -it marketplace-api ls -lah /app/wwwroot/images
+docker logs marketplace-api --tail 100
+```
+
+If the API was already running without these bind mounts, copy any existing container-only uploads before recreating the container:
+
+```bash
+mkdir -p backend/MarketplaceApi/wwwroot
+docker cp marketplace-api:/app/wwwroot/images backend/MarketplaceApi/wwwroot/
+docker cp marketplace-api:/app/wwwroot/uploads backend/MarketplaceApi/wwwroot/ 2>/dev/null || true
+```
+
+Then recreate the API container:
+
+```bash
+docker compose up -d --build marketplace-api
+```
 
 ## 2. Mobile App Build Environment
 

@@ -1,73 +1,237 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:signalr_netcore/signalr_client.dart';
+
 import '../models/models.dart';
 import 'api_service.dart';
 
+enum ChatRealtimeConnectionStatus {
+  disconnected,
+  connecting,
+  connected,
+  reconnecting,
+}
+
 class ChatService {
   final ApiService _apiService = ApiService();
-  HubConnection? _hubConnection;
+  final Set<int> _joinedConversationIds = <int>{};
 
-  // Callback for receiving messages
+  HubConnection? _hubConnection;
+  String? _token;
+  bool _manualDisconnect = false;
+
   Function(ChatMessage)? onMessageReceived;
+  Function(Conversation)? onConversationUpdated;
+  Function(UnreadSummary)? onUnreadCountUpdated;
+  Function(MessageReadReceipt)? onMessagesRead;
+  Function(int userId, bool isOnline)? onUserPresenceChanged;
+  Function(ChatRealtimeConnectionStatus)? onConnectionStatusChanged;
+  Future<void> Function()? onReconnected;
+
+  bool get isConnected => _hubConnection?.state == HubConnectionState.Connected;
 
   Future<void> connect(String token) async {
-    if (_hubConnection?.state == HubConnectionState.Connected) return;
+    if (_token != token && _hubConnection != null) {
+      await disconnect(resetToken: false);
+    }
 
+    _token = token;
+    _manualDisconnect = false;
+
+    if (_hubConnection == null) {
+      _hubConnection = _buildConnection();
+      _registerRealtimeHandlers(_hubConnection!);
+    }
+
+    await _ensureConnected();
+  }
+
+  HubConnection _buildConnection() {
     final hubUrl = ApiService.baseUrl.replaceFirst('/api', '/chatHub');
 
-    _hubConnection = HubConnectionBuilder()
+    return HubConnectionBuilder()
         .withUrl(
-          hubUrl,
-          options: HttpConnectionOptions(
-            accessTokenFactory: () async => token,
-          ),
-        )
-        .withAutomaticReconnect()
-        .build();
+      hubUrl,
+      options: HttpConnectionOptions(
+        accessTokenFactory: () async => _token ?? '',
+        requestTimeout: 10000,
+      ),
+    )
+        .withAutomaticReconnect(
+      retryDelays: const [0, 2000, 5000, 10000, 30000],
+    ).build();
+  }
 
-    _hubConnection?.on('ReceiveMessage', _handleIncomingMessage);
+  void _registerRealtimeHandlers(HubConnection connection) {
+    connection.on('ReceiveMessage', _handleIncomingMessage);
+    connection.on('ConversationUpdated', _handleConversationUpdated);
+    connection.on('UnreadCountUpdated', _handleUnreadCountUpdated);
+    connection.on('MessagesRead', _handleMessagesRead);
+    connection.on('UserOnline', (args) => _handleUserPresence(args, true));
+    connection.on('UserOffline', (args) => _handleUserPresence(args, false));
+
+    connection.onreconnecting(({error}) {
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.reconnecting);
+    });
+
+    connection.onreconnected(({connectionId}) {
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.connected);
+      unawaited(_rejoinConversations());
+      final callback = onReconnected;
+      if (callback != null) {
+        unawaited(callback());
+      }
+    });
+
+    connection.onclose(({error}) {
+      if (!_manualDisconnect) {
+        _emitConnectionStatus(ChatRealtimeConnectionStatus.disconnected);
+      }
+    });
+  }
+
+  Future<void> _ensureConnected() async {
+    final connection = _hubConnection;
+    if (connection == null) {
+      throw Exception('SignalR n\'est pas configure');
+    }
+
+    if (connection.state == HubConnectionState.Connected) {
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.connected);
+      return;
+    }
+
+    if (connection.state == HubConnectionState.Connecting ||
+        connection.state == HubConnectionState.Reconnecting) {
+      return;
+    }
+
+    _emitConnectionStatus(ChatRealtimeConnectionStatus.connecting);
+    try {
+      await connection.start();
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.connected);
+      await _rejoinConversations();
+    } catch (_) {
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.disconnected);
+      rethrow;
+    }
+  }
+
+  Future<void> disconnect({bool resetToken = true}) async {
+    _manualDisconnect = true;
+    _joinedConversationIds.clear();
 
     try {
-      await _hubConnection?.start();
-      print('SignalR Connected');
-    } catch (e) {
-      print('Error connecting to SignalR: $e');
+      await _hubConnection?.stop();
+    } finally {
+      _hubConnection = null;
+      if (resetToken) _token = null;
+      _emitConnectionStatus(ChatRealtimeConnectionStatus.disconnected);
     }
-  }
-
-  void _handleIncomingMessage(List<Object?>? args) {
-    if (args != null && args.isNotEmpty && onMessageReceived != null) {
-      final messageData = args[0] as Map<String, dynamic>;
-      // Need to handle the fact that signalr might return a Map<dynamic, dynamic>
-      // or cast it properly
-      try {
-        // Convert Map<dynamic, dynamic> to Map<String, dynamic> if necessary
-        final json = jsonDecode(jsonEncode(messageData));
-        final message = ChatMessage.fromJson(json);
-        onMessageReceived!(message);
-      } catch (e) {
-        print('Error parsing incoming message: $e');
-      }
-    }
-  }
-
-  Future<void> disconnect() async {
-    await _hubConnection?.stop();
   }
 
   Future<void> joinConversation(int conversationId) async {
-    if (_hubConnection?.state == HubConnectionState.Connected) {
-      await _hubConnection?.invoke('JoinConversation', args: [conversationId]);
-    }
+    if (conversationId <= 0) return;
+
+    _joinedConversationIds.add(conversationId);
+    await _ensureConnected();
+    await _hubConnection?.invoke('JoinConversation', args: [conversationId]);
   }
 
   Future<void> leaveConversation(int conversationId) async {
+    if (conversationId <= 0) return;
+
+    _joinedConversationIds.remove(conversationId);
     if (_hubConnection?.state == HubConnectionState.Connected) {
       await _hubConnection?.invoke('LeaveConversation', args: [conversationId]);
     }
   }
 
-  // API Methods
+  Future<void> _rejoinConversations() async {
+    if (_hubConnection?.state != HubConnectionState.Connected) return;
+
+    for (final conversationId in List<int>.from(_joinedConversationIds)) {
+      try {
+        await _hubConnection
+            ?.invoke('JoinConversation', args: [conversationId]);
+      } catch (_) {
+        // The HTTP refresh after reconnect will repair local state if this fails.
+      }
+    }
+  }
+
+  void _handleIncomingMessage(List<Object?>? args) {
+    final data = _decodeFirstArgument(args);
+    if (data == null || onMessageReceived == null) return;
+
+    try {
+      onMessageReceived!(ChatMessage.fromJson(data));
+    } catch (_) {
+      // Ignore malformed payloads to keep the chat stream alive.
+    }
+  }
+
+  void _handleConversationUpdated(List<Object?>? args) {
+    final data = _decodeFirstArgument(args);
+    if (data == null || onConversationUpdated == null) return;
+
+    try {
+      onConversationUpdated!(Conversation.fromJson(data));
+    } catch (_) {}
+  }
+
+  void _handleUnreadCountUpdated(List<Object?>? args) {
+    final data = _decodeFirstArgument(args);
+    if (data == null || onUnreadCountUpdated == null) return;
+
+    try {
+      onUnreadCountUpdated!(UnreadSummary.fromJson(data));
+    } catch (_) {}
+  }
+
+  void _handleMessagesRead(List<Object?>? args) {
+    final data = _decodeFirstArgument(args);
+    if (data == null || onMessagesRead == null) return;
+
+    try {
+      onMessagesRead!(MessageReadReceipt.fromJson(data));
+    } catch (_) {}
+  }
+
+  void _handleUserPresence(List<Object?>? args, bool isOnline) {
+    final data = _decodeFirstArgument(args);
+    if (data == null || onUserPresenceChanged == null) return;
+
+    final rawUserId = data['userId'];
+    final userId = rawUserId is int
+        ? rawUserId
+        : rawUserId is num
+            ? rawUserId.toInt()
+            : int.tryParse(rawUserId?.toString() ?? '') ?? 0;
+    if (userId > 0) {
+      onUserPresenceChanged!(userId, isOnline);
+    }
+  }
+
+  Map<String, dynamic>? _decodeFirstArgument(List<Object?>? args) {
+    if (args == null || args.isEmpty || args.first == null) return null;
+
+    final first = args.first;
+    if (first is Map<String, dynamic>) return first;
+    if (first is Map) return Map<String, dynamic>.from(first);
+
+    try {
+      return jsonDecode(jsonEncode(first)) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _emitConnectionStatus(ChatRealtimeConnectionStatus status) {
+    onConnectionStatusChanged?.call(status);
+  }
+
   Future<List<Conversation>> getConversations() async {
     final response = await _apiService.authenticatedRequest(
       '/chat/conversations',
@@ -76,38 +240,102 @@ class ChatService {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      return data.map((json) => Conversation.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load conversations: ${response.statusCode}');
+      return data
+          .map((json) => Conversation.fromJson(json as Map<String, dynamic>))
+          .toList();
     }
+
+    throw Exception('Failed to load conversations: ${response.statusCode}');
   }
 
-  Future<List<ChatMessage>> getMessages(int conversationId) async {
+  Future<UnreadSummary> getUnreadSummary() async {
     final response = await _apiService.authenticatedRequest(
-      '/chat/conversations/$conversationId/messages',
+      '/chat/unread-count',
+      method: 'GET',
+    );
+
+    if (response.statusCode == 200) {
+      return UnreadSummary.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+
+    throw Exception('Failed to load unread count: ${response.statusCode}');
+  }
+
+  Future<List<ChatMessage>> getMessages(
+    int conversationId, {
+    int pageSize = 50,
+    int? beforeMessageId,
+  }) async {
+    final query = <String, String>{'pageSize': pageSize.toString()};
+    if (beforeMessageId != null) {
+      query['beforeMessageId'] = beforeMessageId.toString();
+    }
+
+    final path = Uri(
+      path: '/chat/conversations/$conversationId/messages',
+      queryParameters: query,
+    ).toString();
+
+    final response = await _apiService.authenticatedRequest(
+      path,
       method: 'GET',
     );
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      return data.map((json) => ChatMessage.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load messages: ${response.statusCode}');
+      return data
+          .map((json) => ChatMessage.fromJson(json as Map<String, dynamic>))
+          .toList();
     }
+
+    throw Exception('Failed to load messages: ${response.statusCode}');
   }
 
-  Future<ChatMessage> sendMessage(int conversationId, String content) async {
+  Future<UnreadSummary> markConversationAsRead(int conversationId) async {
+    if (conversationId <= 0) {
+      return const UnreadSummary(totalUnread: 0, conversations: []);
+    }
+
     final response = await _apiService.authenticatedRequest(
-      '/chat/conversations/$conversationId/messages',
+      '/chat/conversations/$conversationId/read',
       method: 'POST',
-      body: {'content': content},
     );
 
     if (response.statusCode == 200) {
-      return ChatMessage.fromJson(jsonDecode(response.body));
-    } else {
-      throw Exception('Failed to send message: ${response.statusCode}');
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      return UnreadSummary.fromJson(
+        decoded['unreadSummary'] as Map<String, dynamic>,
+      );
     }
+
+    throw Exception('Failed to mark messages as read: ${response.statusCode}');
+  }
+
+  Future<ChatMessage> sendMessage(
+    int conversationId,
+    String content, {
+    required int annonceId,
+    String? clientMessageId,
+  }) async {
+    final response = await _apiService.authenticatedRequest(
+      '/chat/conversations/$conversationId/messages',
+      method: 'POST',
+      body: {
+        'content': content,
+        'annonceId': annonceId,
+        if (clientMessageId != null) 'clientMessageId': clientMessageId,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return ChatMessage.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+
+    throw Exception('Failed to send message: ${response.statusCode}');
   }
 
   Future<Conversation> startConversation(int annonceId) async {
@@ -118,15 +346,16 @@ class ChatService {
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return Conversation.fromJson(jsonDecode(response.body));
-    } else {
-      // Decode error message if possible
-      try {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Failed to start conversation');
-      } catch (_) {
-        throw Exception('Failed to start conversation: ${response.statusCode}');
-      }
+      return Conversation.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+
+    try {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to start conversation');
+    } catch (_) {
+      throw Exception('Failed to start conversation: ${response.statusCode}');
     }
   }
 }

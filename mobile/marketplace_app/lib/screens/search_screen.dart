@@ -3,9 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
+import '../theme/app_colors.dart';
 import 'annonce_detail_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/star_rating.dart';
+import '../l10n/app_localizations.dart';
+import '../widgets/hierarchical_category_selector.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? title;
@@ -99,26 +102,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _showFilterDialog() {
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
+    final l10n = AppLocalizations.of(context)!;
     int? initialCategoryId = provider.categoryIdFilter;
-    CategoryModel? selectedParentCategory;
-    CategoryModel? selectedSubCategory;
-
-    if (initialCategoryId != null) {
-      for (var parent in _apiCategories) {
-        if (parent.id == initialCategoryId) {
-          selectedParentCategory = parent;
-          break;
-        }
-        for (var sub in parent.subCategories) {
-          if (sub.id == initialCategoryId) {
-            selectedParentCategory = parent;
-            selectedSubCategory = sub;
-            break;
-          }
-        }
-        if (selectedParentCategory != null) break;
-      }
-    }
+    int? selectedCategoryId = initialCategoryId;
 
     List<int> selectedWilayaIds = provider.wilayaFilters?.toList() ?? [];
     List<int> selectedCommuneIds = provider.communeFilters?.toList() ?? [];
@@ -189,7 +175,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Filtres',
+                        l10n.filters,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       TextButton(
@@ -201,7 +187,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           }
                           Navigator.pop(context);
                         },
-                        child: const Text('Réinitialiser'),
+                        child: Text(l10n.reset),
                       ),
                     ],
                   ),
@@ -210,74 +196,31 @@ class _SearchScreenState extends State<SearchScreen> {
                   if (!widget.lockCategory) ...[
                     // Category filter
                     Text(
-                      'Catégorie',
+                      l10n.category,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
                     _loadingCategories
                         ? const Center(child: CircularProgressIndicator())
-                        : DropdownButtonFormField<CategoryModel>(
-                            value: selectedParentCategory,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'Toutes les catégories',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: [
-                              const DropdownMenuItem<CategoryModel>(
-                                value: null,
-                                child: Text('Toutes'),
-                              ),
-                              ..._apiCategories.map((c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(c.name),
-                                  )),
-                            ],
-                            onChanged: (category) {
+                        : HierarchicalCategorySelector(
+                            categories: _apiCategories,
+                            selectedCategoryId: selectedCategoryId,
+                            labelText: l10n.category,
+                            hintText: l10n.allCategories,
+                            allowClear: true,
+                            onChanged: (selection) {
                               setModalState(() {
-                                selectedParentCategory = category;
-                                selectedSubCategory = null;
+                                selectedCategoryId =
+                                    selection?.selectedCategoryId;
                               });
                             },
                           ),
-                    const SizedBox(height: 16),
-
-                    if (selectedParentCategory != null &&
-                        selectedParentCategory!.subCategories.isNotEmpty) ...[
-                      DropdownButtonFormField<CategoryModel>(
-                        value: selectedSubCategory,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: 'Sous-catégorie',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: [
-                          const DropdownMenuItem<CategoryModel>(
-                            value: null,
-                            child: Text('Toutes'),
-                          ),
-                          ...selectedParentCategory!.subCategories.map(
-                            (c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(c.name),
-                            ),
-                          ),
-                        ],
-                        onChanged: (category) {
-                          setModalState(() => selectedSubCategory = category);
-                        },
-                      ),
-                    ],
                     const SizedBox(height: 16),
                   ],
 
                   // Wilaya filter
                   Text(
-                    'Wilayas',
+                    l10n.wilayas,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -291,7 +234,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 return StatefulBuilder(
                                     builder: (ctx, setDialogState) {
                                   return AlertDialog(
-                                    title: const Text('Sélectionner Wilayas'),
+                                    title: Text(l10n.selectWilayas),
                                     content: SizedBox(
                                       width: double.maxFinite,
                                       child: ListView.builder(
@@ -334,7 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           },
                           child: InputDecorator(
                             decoration: InputDecoration(
-                              labelText: 'Toutes les wilayas',
+                              labelText: l10n.allWilayas,
                               border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
@@ -342,8 +285,9 @@ class _SearchScreenState extends State<SearchScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(selectedWilayaIds.isEmpty
-                                    ? 'Toutes les wilayas'
-                                    : '${selectedWilayaIds.length} sélectionnée(s)'),
+                                    ? l10n.allWilayas
+                                    : l10n.selectedCount(
+                                        selectedWilayaIds.length)),
                                 const Icon(Icons.arrow_drop_down),
                               ],
                             ),
@@ -354,7 +298,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   // Commune filter
                   if (selectedWilayaIds.isNotEmpty) ...[
                     Text(
-                      'Communes',
+                      l10n.communes,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -368,8 +312,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   return StatefulBuilder(
                                       builder: (ctx, setDialogState) {
                                     return AlertDialog(
-                                      title:
-                                          const Text('Sélectionner Communes'),
+                                      title: Text(l10n.selectCommunes),
                                       content: SizedBox(
                                         width: double.maxFinite,
                                         child: ListView.builder(
@@ -412,7 +355,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             },
                             child: InputDecorator(
                               decoration: InputDecoration(
-                                labelText: 'Toutes les communes',
+                                labelText: l10n.allCommunes,
                                 border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12)),
                               ),
@@ -421,8 +364,9 @@ class _SearchScreenState extends State<SearchScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(selectedCommuneIds.isEmpty
-                                      ? 'Toutes les communes'
-                                      : '${selectedCommuneIds.length} sélectionnée(s)'),
+                                      ? l10n.allCommunes
+                                      : l10n.selectedCount(
+                                          selectedCommuneIds.length)),
                                   const Icon(Icons.arrow_drop_down),
                                 ],
                               ),
@@ -433,7 +377,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
                   // Price filter
                   Text(
-                    'Prix',
+                    l10n.priceDa,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -444,7 +388,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           controller: minPriceController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            labelText: 'Min',
+                            labelText: l10n.min,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -457,7 +401,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           controller: maxPriceController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            labelText: 'Max',
+                            labelText: l10n.max,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -473,8 +417,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     onPressed: () {
                       final finalCategoryId = widget.lockCategory
                           ? initialCategoryId
-                          : (selectedSubCategory?.id ??
-                              selectedParentCategory?.id);
+                          : selectedCategoryId;
                       provider.setFilters(
                         categoryId: finalCategoryId,
                         clearCategory: !widget.lockCategory &&
@@ -493,7 +436,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text('Appliquer'),
+                    child: Text(l10n.apply),
                   ),
                 ],
               ),
@@ -520,7 +463,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title ?? 'Recherche'),
+        title: Text(widget.title ?? AppLocalizations.of(context)!.search),
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),
@@ -550,7 +493,7 @@ class _SearchScreenState extends State<SearchScreen> {
             children: [
               Expanded(
                 child: Text(
-                  widget.title ?? 'Recherche',
+                  widget.title ?? AppLocalizations.of(context)!.search,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -572,7 +515,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildSearchField(BuildContext context) {
     return TextField(
       decoration: InputDecoration(
-        hintText: 'Rechercher...',
+        hintText: AppLocalizations.of(context)!.searchHint,
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: Theme.of(context).cardColor,
@@ -603,13 +546,16 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                Icon(Icons.error_outline,
+                    size: 64,
+                    color:
+                        Theme.of(context).extension<AppColors>()!.textTertiary),
                 const SizedBox(height: 16),
                 Text(provider.error!),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _loadAnnonces,
-                  child: const Text('Réessayer'),
+                  child: Text(AppLocalizations.of(context)!.retry),
                 ),
               ],
             ),
@@ -621,11 +567,17 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
+                Icon(Icons.inbox_outlined,
+                    size: 64,
+                    color:
+                        Theme.of(context).extension<AppColors>()!.textTertiary),
                 const SizedBox(height: 16),
                 Text(
-                  'Aucune annonce trouvée',
-                  style: TextStyle(color: Colors.grey[600]),
+                  AppLocalizations.of(context)!.noAnnoncesFound,
+                  style: TextStyle(
+                      color: Theme.of(context)
+                          .extension<AppColors>()!
+                          .textSecondary),
                 ),
               ],
             ),
@@ -641,7 +593,7 @@ class _SearchScreenState extends State<SearchScreen> {
             padding: const EdgeInsets.all(12),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.75,
+              childAspectRatio: 0.68,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -661,6 +613,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildAnnonceCard(AnnonceListItem annonce) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     final isGoodDeal = annonce.isGoodDeal;
     final hasSellerRating =
         annonce.sellerRating != null && (annonce.sellerRatingCount ?? 0) > 0;
@@ -675,12 +628,12 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       },
       child: Card(
-        elevation: 2,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppLayout.borderRadiusMedium,
           side: isGoodDeal
-              ? BorderSide(color: Colors.green.shade400, width: 1.2)
-              : BorderSide.none,
+              ? BorderSide(color: colors.accent, width: 1.2)
+              : BorderSide(color: colors.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -688,32 +641,35 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             // Image
             Expanded(
-              flex: 3,
+              flex: 5,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
+                  (annonce.mainThumbnailUrl != null ||
+                          annonce.mainImageUrl != null)
                       ? CachedNetworkImage(
-                          imageUrl:
-                              ApiService.getImageUrl(annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
+                          imageUrl: ApiService.getImageUrl(
+                              annonce.mainThumbnailUrl ??
+                                  annonce.mainImageUrl!)!,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           placeholder: (context, url) => Container(
-                            color: Colors.grey[200],
+                            color: colors.imagePlaceholder,
                             child: const Center(
                               child: CircularProgressIndicator(),
                             ),
                           ),
                           errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[200],
-                            child: const Icon(Icons.image_not_supported),
+                            color: colors.imagePlaceholder,
+                            child: Icon(Icons.image_not_supported,
+                                color: colors.textTertiary),
                           ),
                         )
                       : Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child:
-                                Icon(Icons.image, size: 48, color: Colors.grey),
+                          color: colors.imagePlaceholder,
+                          child: Center(
+                            child: Icon(Icons.image,
+                                size: 48, color: colors.textTertiary),
                           ),
                         ),
                   if (isGoodDeal)
@@ -724,13 +680,14 @@ class _SearchScreenState extends State<SearchScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade600.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(999),
+                          color: colors.accent,
+                          borderRadius:
+                              BorderRadius.circular(AppLayout.radiusFull),
                         ),
-                        child: const Text(
-                          'Bonne affaire',
+                        child: Text(
+                          AppLocalizations.of(context)!.goodDeal,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: colors.textOnPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 11,
                           ),
@@ -742,7 +699,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             // Info
             Expanded(
-              flex: 2,
+              flex: 4,
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Column(
@@ -752,9 +709,10 @@ class _SearchScreenState extends State<SearchScreen> {
                       annonce.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 14,
+                        color: colors.textPrimary,
                       ),
                     ),
                     if (hasSellerRating) ...[
@@ -767,11 +725,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     ],
                     const Spacer(),
                     Text(
-                      '${annonce.price.toStringAsFixed(0)} DA',
+                      AppLocalizations.of(context)!
+                          .price(annonce.price.toStringAsFixed(0)),
                       style: TextStyle(
-                        color: isGoodDeal
-                            ? Colors.green.shade700
-                            : Theme.of(context).primaryColor,
+                        color: isGoodDeal ? colors.accent : colors.primary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -782,7 +739,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         Icon(
                           Icons.location_on_outlined,
                           size: 14,
-                          color: Colors.grey[600],
+                          color: colors.textTertiary,
                         ),
                         const SizedBox(width: 2),
                         Expanded(
@@ -791,7 +748,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: colors.textTertiary,
                               fontSize: 12,
                             ),
                           ),

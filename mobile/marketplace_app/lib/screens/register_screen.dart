@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/social_auth_service.dart';
+import '../theme/app_colors.dart';
 import 'home_screen.dart';
 import 'complete_profile_screen.dart';
+import 'phone_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -40,11 +43,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _loadWilayas() async {
     try {
       final wilayas = await ApiService().getWilayas();
+      if (!mounted) return;
       setState(() {
         _wilayas = wilayas;
         _loadingWilayas = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingWilayas = false);
     }
   }
@@ -57,11 +62,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     try {
       final communes = await ApiService().getCommunes(wilayaId);
+      if (!mounted) return;
       setState(() {
         _communes = communes;
         _loadingCommunes = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingCommunes = false);
     }
   }
@@ -80,9 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedWilaya == null || _selectedCommune == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez sélectionner votre wilaya et commune'),
-          backgroundColor: Colors.red,
+        SnackBar(
+            content: Text('Veuillez sélectionner votre wilaya et commune'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -106,47 +113,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(authProvider.error ?? 'Erreur lors de l\'inscription'),
-          backgroundColor: Colors.red,
+          content: Text(authProvider.error ?? "Erreur lors de l'inscription"),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
   }
 
-  Future<void> _mockSocialLogin(String provider) async {
+  Future<void> _googleLogin() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final success = await authProvider.socialLogin(
-      provider: provider,
-      providerId: 'mock_${provider.toLowerCase()}_123',
-      email: 'mockuser@$provider.com',
-      name: 'Mock $provider User',
-      accessToken: 'dummy_token',
-    );
 
-    if (success && mounted) {
-      if (authProvider.user?.phone.isEmpty ?? true) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-          (route) => false,
-        );
-      } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
+    try {
+      final result = await SocialAuthService.signInWithGoogle();
+      if (result == null) return;
+
+      final success = await authProvider.socialLogin(
+        provider: result.provider,
+        providerId: result.providerId,
+        email: result.email,
+        name: result.name,
+        accessToken: result.accessToken,
+      );
+
+      if (success && mounted) {
+        if (authProvider.user?.phone.isEmpty ?? true) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.error ?? 'Erreur de connexion Google'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
         );
       }
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error ?? 'Erreur de connexion sociale'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
+        );
+      }
     }
+  }
+
+  void _phoneLogin() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PhoneVerificationScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = context.select<AuthProvider, bool>((a) => a.isLoading);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inscription'),
@@ -159,7 +189,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             end: Alignment.bottomCenter,
             colors: [
               Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              Colors.white,
+              Theme.of(context).extension<AppColors>()!.backgroundPrimary,
             ],
           ),
         ),
@@ -366,28 +396,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 32),
 
                 // Register button
-                Consumer<AuthProvider>(
-                  builder: (context, auth, child) {
-                    return SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: auth.isLoading ? null : _register,
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: auth.isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                              )
-                            : const Text(
-                                'S\'inscrire',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  },
+                    ),
+                    child: isLoading
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Theme.of(context).extension<AppColors>()!.textOnPrimary,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : const Text(
+                            "S'inscrire",
+                            style: TextStyle(fontSize: 16),
+                          ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -403,39 +434,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Social Buttons
-                Consumer<AuthProvider>(
-                  builder: (context, auth, child) {
-                    return Column(
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: auth.isLoading
-                              ? null
-                              : () => _mockSocialLogin('Google'),
-                          icon: const Icon(Icons.g_mobiledata, size: 32),
-                          label: const Text('S\'inscrire avec Google'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: auth.isLoading
-                              ? null
-                              : () => _mockSocialLogin('Facebook'),
-                          icon: const Icon(Icons.facebook, color: Colors.blue),
-                          label: const Text('S\'inscrire avec Facebook'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                // Google button
+                OutlinedButton.icon(
+                  onPressed: isLoading ? null : _googleLogin,
+                  icon: const Icon(Icons.g_mobiledata, size: 32),
+                  label: const Text("S'inscrire avec Google"),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Phone OTP button
+                OutlinedButton.icon(
+                  onPressed: isLoading ? null : _phoneLogin,
+                  icon: const Icon(Icons.phone_android),
+                  label: const Text("S'inscrire avec Téléphone"),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 

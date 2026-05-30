@@ -123,6 +123,11 @@ public class ApplicationDbContext : DbContext
         // Conversation configuration
         modelBuilder.Entity<Conversation>(entity =>
         {
+            entity.HasIndex(e => e.LastMessageAt);
+            entity.HasIndex(e => new { e.BuyerId, e.LastMessageAt });
+            entity.HasIndex(e => new { e.SellerId, e.LastMessageAt });
+            entity.HasIndex(e => new { e.AnnonceId, e.BuyerId, e.SellerId, e.IsModeration });
+
             entity.HasOne(c => c.Annonce)
                 .WithMany()
                 .HasForeignKey(c => c.AnnonceId)
@@ -142,6 +147,9 @@ public class ApplicationDbContext : DbContext
         // Message configuration
         modelBuilder.Entity<Message>(entity =>
         {
+            entity.HasIndex(e => new { e.ConversationId, e.SentAt });
+            entity.HasIndex(e => new { e.ReceiverId, e.IsRead });
+
             entity.HasOne(m => m.Conversation)
                 .WithMany(c => c.Messages)
                 .HasForeignKey(m => m.ConversationId)
@@ -150,6 +158,11 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(m => m.Sender)
                 .WithMany()
                 .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(m => m.Receiver)
+                .WithMany()
+                .HasForeignKey(m => m.ReceiverId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

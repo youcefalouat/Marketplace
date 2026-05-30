@@ -1,10 +1,37 @@
 // Data Models for the Marketplace App
 
+Map<String, dynamic>? _asStringKeyMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return null;
+}
+
+double _readDouble(dynamic value, {double fallback = 0}) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
+  }
+  return fallback;
+}
+
+int _readInt(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+DateTime _readDateTime(dynamic value) {
+  if (value is String) return DateTime.parse(value);
+  return DateTime.now().toUtc();
+}
+
 enum UserRole { user, admin }
 
 class CategoryModel {
   final int id;
   final String name;
+  final String arName;
   final String slug;
   final int? parentId;
   final List<CategoryModel> subCategories;
@@ -12,29 +39,85 @@ class CategoryModel {
   CategoryModel({
     required this.id,
     required this.name,
+    this.arName = '',
     required this.slug,
     this.parentId,
     required this.subCategories,
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
+    final childrenJson = json['children'] ?? json['subCategories'];
     return CategoryModel(
       id: json['id'] as int,
-      name: json['name'] as String,
-      slug: json['slug'] as String,
+      name: json['name'] as String? ?? '',
+      arName: json['arName'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
       parentId: json['parentId'] as int?,
-      subCategories: json['subCategories'] != null
-          ? (json['subCategories'] as List)
+      subCategories: childrenJson != null
+          ? (childrenJson as List)
               .map((e) => CategoryModel.fromJson(e as Map<String, dynamic>))
               .toList()
           : [],
     );
   }
+
+  String nameForLanguage(String languageCode) {
+    if (languageCode == 'ar' && arName.trim().isNotEmpty) {
+      return arName;
+    }
+
+    return name;
+  }
 }
 
 enum ProductState { neuf, occasion }
 
-enum AnnonceStatus { pending, approved, rejected, underReview }
+enum AnnonceStatus {
+  pending,
+  approved,
+  rejected,
+  underReview,
+  sold,
+  archived,
+  deleted,
+}
+
+enum AnnonceDeletionStatus { sold, archived, deleted }
+
+extension AnnonceDeletionStatusX on AnnonceDeletionStatus {
+  int get apiValue {
+    switch (this) {
+      case AnnonceDeletionStatus.sold:
+        return 4;
+      case AnnonceDeletionStatus.archived:
+        return 5;
+      case AnnonceDeletionStatus.deleted:
+        return 6;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case AnnonceDeletionStatus.sold:
+        return 'Vendu';
+      case AnnonceDeletionStatus.archived:
+        return 'Archive / Ne veux plus vendre';
+      case AnnonceDeletionStatus.deleted:
+        return 'Erreur / Supprime';
+    }
+  }
+
+  String get successMessage {
+    switch (this) {
+      case AnnonceDeletionStatus.sold:
+        return 'Annonce marquee comme vendue';
+      case AnnonceDeletionStatus.archived:
+        return 'Annonce archivee';
+      case AnnonceDeletionStatus.deleted:
+        return 'Annonce supprimee';
+    }
+  }
+}
 
 class Wilaya {
   final int id;
@@ -190,7 +273,9 @@ class AnnonceListItem {
   final double price;
   final String wilayaName;
   final String communeName;
+  final int? categoryId;
   final String category;
+  final String categoryArName;
   final String? mainImageUrl;
   final String? mainThumbnailUrl;
   final bool isExchange;
@@ -205,7 +290,9 @@ class AnnonceListItem {
     required this.price,
     required this.wilayaName,
     required this.communeName,
+    this.categoryId,
     required this.category,
+    this.categoryArName = '',
     this.mainImageUrl,
     this.mainThumbnailUrl,
     required this.isExchange,
@@ -222,7 +309,11 @@ class AnnonceListItem {
       price: (json['price'] as num).toDouble(),
       wilayaName: json['wilayaName'] as String? ?? '',
       communeName: json['communeName'] as String? ?? '',
-      category: json['category'] as String,
+      categoryId: json['categoryId'] as int?,
+      category: (json['categoryName'] as String?) ??
+          (json['category'] as String?) ??
+          '',
+      categoryArName: json['categoryArName'] as String? ?? '',
       mainImageUrl: json['mainImageUrl'] as String?,
       mainThumbnailUrl: json['mainThumbnailUrl'] as String?,
       isExchange: json['isExchange'] as bool? ?? false,
@@ -271,7 +362,9 @@ class AnnonceDetail {
   final String title;
   final String description;
   final double price;
+  final int? categoryId;
   final String category;
+  final String categoryArName;
   final String state;
   final String phone;
   final int wilayaId;
@@ -291,7 +384,9 @@ class AnnonceDetail {
     required this.title,
     required this.description,
     required this.price,
+    this.categoryId,
     required this.category,
+    this.categoryArName = '',
     required this.state,
     required this.phone,
     required this.wilayaId,
@@ -313,7 +408,11 @@ class AnnonceDetail {
       title: json['title'] as String,
       description: json['description'] as String,
       price: (json['price'] as num).toDouble(),
-      category: json['category'] as String,
+      categoryId: json['categoryId'] as int?,
+      category: (json['categoryName'] as String?) ??
+          (json['category'] as String?) ??
+          '',
+      categoryArName: json['categoryArName'] as String? ?? '',
       state: json['state'] as String,
       phone: json['phone'] as String,
       wilayaId: json['wilayaId'] as int,
@@ -337,7 +436,9 @@ class MyAnnonce {
   final int id;
   final String title;
   final double price;
+  final int? categoryId;
   final String category;
+  final String categoryArName;
   final String status;
   final String? mainImageUrl;
   final String? mainThumbnailUrl;
@@ -349,7 +450,9 @@ class MyAnnonce {
     required this.id,
     required this.title,
     required this.price,
+    this.categoryId,
     required this.category,
+    this.categoryArName = '',
     required this.status,
     this.mainImageUrl,
     this.mainThumbnailUrl,
@@ -363,7 +466,11 @@ class MyAnnonce {
       id: json['id'] as int,
       title: json['title'] as String,
       price: (json['price'] as num).toDouble(),
-      category: json['category'] as String,
+      categoryId: json['categoryId'] as int?,
+      category: (json['categoryName'] as String?) ??
+          (json['category'] as String?) ??
+          '',
+      categoryArName: json['categoryArName'] as String? ?? '',
       status: json['status'] as String,
       mainImageUrl: json['mainImageUrl'] as String?,
       mainThumbnailUrl: json['mainThumbnailUrl'] as String?,
@@ -400,7 +507,9 @@ class PaginatedResponse<T> {
       totalCount: json['totalCount'] as int,
       page: json['page'] as int,
       pageSize: json['pageSize'] as int,
-      totalPages: ((json['totalCount'] as int) + (json['pageSize'] as int) - 1) ~/ (json['pageSize'] as int),
+      totalPages:
+          ((json['totalCount'] as int) + (json['pageSize'] as int) - 1) ~/
+              (json['pageSize'] as int),
     );
   }
 }
@@ -410,10 +519,20 @@ class Conversation {
   final int annonceId;
   final String annonceTitle;
   final String annonceImage;
+  final double annoncePrice;
+  final String annonceCurrency;
+  final int annonceOwnerId;
+  final int? annonceCategoryId;
+  final String annonceCategoryName;
+  final String annonceCategoryArName;
+  final String annonceStatus;
   final int interlocutorId;
   final String interlocutorName;
+  final bool isInterlocutorOnline;
   final DateTime lastMessageAt;
   final String lastMessageContent;
+  final int? lastMessageSenderId;
+  final int unreadCount;
   final bool hasUnreadMessages;
   final bool isModeration;
 
@@ -422,58 +541,251 @@ class Conversation {
     required this.annonceId,
     required this.annonceTitle,
     required this.annonceImage,
+    this.annoncePrice = 0,
+    this.annonceCurrency = 'DA',
+    this.annonceOwnerId = 0,
+    this.annonceCategoryId,
+    this.annonceCategoryName = '',
+    this.annonceCategoryArName = '',
+    this.annonceStatus = '',
     required this.interlocutorId,
     required this.interlocutorName,
+    this.isInterlocutorOnline = false,
     required this.lastMessageAt,
     required this.lastMessageContent,
+    this.lastMessageSenderId,
+    this.unreadCount = 0,
     required this.hasUnreadMessages,
     this.isModeration = false,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
+    final annonce = _asStringKeyMap(json['annonce']);
+    final priceValue =
+        json['annoncePrice'] ?? json['price'] ?? annonce?['price'];
+    final unreadCount = _readInt(json['unreadCount']);
+
     return Conversation(
-      id: json['id'] as int,
-      annonceId: json['annonceId'] as int,
-      annonceTitle: json['annonceTitle'] as String? ?? '',
-      annonceImage: json['annonceImage'] as String? ?? '',
-      interlocutorId: json['interlocutorId'] as int,
+      id: _readInt(json['id']),
+      annonceId: _readInt(json['annonceId'] ?? annonce?['id']),
+      annonceTitle:
+          json['annonceTitle'] as String? ?? annonce?['title'] as String? ?? '',
+      annonceImage: json['annonceImage'] as String? ??
+          json['image'] as String? ??
+          annonce?['image'] as String? ??
+          '',
+      annoncePrice: _readDouble(priceValue),
+      annonceCurrency: json['annonceCurrency'] as String? ??
+          annonce?['currency'] as String? ??
+          'DA',
+      annonceOwnerId: _readInt(
+        json['annonceOwnerId'] ?? json['ownerId'] ?? annonce?['ownerId'],
+      ),
+      annonceCategoryId: json['annonceCategoryId'] as int?,
+      annonceCategoryName: json['annonceCategoryName'] as String? ?? '',
+      annonceCategoryArName: json['annonceCategoryArName'] as String? ?? '',
+      annonceStatus: json['annonceStatus'] as String? ?? '',
+      interlocutorId: _readInt(json['interlocutorId']),
       interlocutorName: json['interlocutorName'] as String? ?? '',
-      lastMessageAt: DateTime.parse(json['lastMessageAt'] as String),
+      isInterlocutorOnline: json['isInterlocutorOnline'] as bool? ?? false,
+      lastMessageAt: _readDateTime(json['lastMessageAt']),
       lastMessageContent: json['lastMessageContent'] as String? ?? '',
-      hasUnreadMessages: json['hasUnreadMessages'] as bool? ?? false,
+      lastMessageSenderId: json['lastMessageSenderId'] as int?,
+      unreadCount: unreadCount,
+      hasUnreadMessages: json['hasUnreadMessages'] as bool? ?? unreadCount > 0,
       isModeration: json['isModeration'] as bool? ?? false,
     );
   }
+
+  bool get isPending => id <= 0;
+
+  Conversation copyWith({
+    int? id,
+    int? annonceId,
+    String? annonceTitle,
+    String? annonceImage,
+    double? annoncePrice,
+    String? annonceCurrency,
+    int? annonceOwnerId,
+    int? annonceCategoryId,
+    String? annonceCategoryName,
+    String? annonceCategoryArName,
+    String? annonceStatus,
+    int? interlocutorId,
+    String? interlocutorName,
+    bool? isInterlocutorOnline,
+    DateTime? lastMessageAt,
+    String? lastMessageContent,
+    int? lastMessageSenderId,
+    int? unreadCount,
+    bool? hasUnreadMessages,
+    bool? isModeration,
+  }) {
+    final nextUnreadCount = unreadCount ?? this.unreadCount;
+    return Conversation(
+      id: id ?? this.id,
+      annonceId: annonceId ?? this.annonceId,
+      annonceTitle: annonceTitle ?? this.annonceTitle,
+      annonceImage: annonceImage ?? this.annonceImage,
+      annoncePrice: annoncePrice ?? this.annoncePrice,
+      annonceCurrency: annonceCurrency ?? this.annonceCurrency,
+      annonceOwnerId: annonceOwnerId ?? this.annonceOwnerId,
+      annonceCategoryId: annonceCategoryId ?? this.annonceCategoryId,
+      annonceCategoryName: annonceCategoryName ?? this.annonceCategoryName,
+      annonceCategoryArName:
+          annonceCategoryArName ?? this.annonceCategoryArName,
+      annonceStatus: annonceStatus ?? this.annonceStatus,
+      interlocutorId: interlocutorId ?? this.interlocutorId,
+      interlocutorName: interlocutorName ?? this.interlocutorName,
+      isInterlocutorOnline: isInterlocutorOnline ?? this.isInterlocutorOnline,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      lastMessageContent: lastMessageContent ?? this.lastMessageContent,
+      lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      unreadCount: nextUnreadCount,
+      hasUnreadMessages: hasUnreadMessages ?? nextUnreadCount > 0,
+      isModeration: isModeration ?? this.isModeration,
+    );
+  }
 }
+
+enum MessageDeliveryState { sending, sent, failed }
 
 class ChatMessage {
   final int id;
   final int conversationId;
   final int senderId;
+  final int receiverId;
   final String content;
   final DateTime sentAt;
   final bool isRead;
+  final DateTime? readAt;
   final bool isMe;
+  final String? clientMessageId;
+  final MessageDeliveryState deliveryState;
 
   ChatMessage({
     required this.id,
     required this.conversationId,
     required this.senderId,
+    this.receiverId = 0,
     required this.content,
     required this.sentAt,
     required this.isRead,
+    this.readAt,
     required this.isMe,
+    this.clientMessageId,
+    this.deliveryState = MessageDeliveryState.sent,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
-      id: json['id'] as int,
-      conversationId: json['conversationId'] as int,
-      senderId: json['senderId'] as int,
-      content: json['content'] as String,
-      sentAt: DateTime.parse(json['sentAt'] as String),
-      isRead: json['isRead'] as bool,
-      isMe: json['isMe'] as bool,
+      id: _readInt(json['id']),
+      conversationId: _readInt(json['conversationId']),
+      senderId: _readInt(json['senderId']),
+      receiverId: _readInt(json['receiverId']),
+      content: json['content'] as String? ?? '',
+      sentAt: _readDateTime(json['sentAt']),
+      isRead: json['isRead'] as bool? ?? false,
+      readAt: json['readAt'] is String
+          ? DateTime.tryParse(json['readAt'] as String)
+          : null,
+      isMe: json['isMe'] as bool? ?? false,
+      clientMessageId: json['clientMessageId'] as String?,
+      deliveryState: MessageDeliveryState.sent,
+    );
+  }
+
+  ChatMessage copyWith({
+    int? id,
+    int? conversationId,
+    int? senderId,
+    int? receiverId,
+    String? content,
+    DateTime? sentAt,
+    bool? isRead,
+    DateTime? readAt,
+    bool? isMe,
+    String? clientMessageId,
+    MessageDeliveryState? deliveryState,
+  }) {
+    return ChatMessage(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      receiverId: receiverId ?? this.receiverId,
+      content: content ?? this.content,
+      sentAt: sentAt ?? this.sentAt,
+      isRead: isRead ?? this.isRead,
+      readAt: readAt ?? this.readAt,
+      isMe: isMe ?? this.isMe,
+      clientMessageId: clientMessageId ?? this.clientMessageId,
+      deliveryState: deliveryState ?? this.deliveryState,
+    );
+  }
+}
+
+class UnreadConversationCount {
+  final int conversationId;
+  final int count;
+
+  const UnreadConversationCount({
+    required this.conversationId,
+    required this.count,
+  });
+
+  factory UnreadConversationCount.fromJson(Map<String, dynamic> json) {
+    return UnreadConversationCount(
+      conversationId: _readInt(json['conversationId']),
+      count: _readInt(json['count']),
+    );
+  }
+}
+
+class UnreadSummary {
+  final int totalUnread;
+  final List<UnreadConversationCount> conversations;
+
+  const UnreadSummary({
+    required this.totalUnread,
+    required this.conversations,
+  });
+
+  factory UnreadSummary.fromJson(Map<String, dynamic> json) {
+    return UnreadSummary(
+      totalUnread: _readInt(json['totalUnread']),
+      conversations: (json['conversations'] as List<dynamic>? ?? [])
+          .map((item) =>
+              UnreadConversationCount.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<int, int> get perConversation => {
+        for (final item in conversations) item.conversationId: item.count,
+      };
+}
+
+class MessageReadReceipt {
+  final int conversationId;
+  final int readerId;
+  final DateTime readAt;
+  final List<int> messageIds;
+
+  const MessageReadReceipt({
+    required this.conversationId,
+    required this.readerId,
+    required this.readAt,
+    required this.messageIds,
+  });
+
+  factory MessageReadReceipt.fromJson(Map<String, dynamic> json) {
+    return MessageReadReceipt(
+      conversationId: _readInt(json['conversationId']),
+      readerId: _readInt(json['readerId']),
+      readAt: _readDateTime(json['readAt']),
+      messageIds: (json['messageIds'] as List<dynamic>? ?? [])
+          .map((item) => _readInt(item))
+          .toList(),
     );
   }
 }

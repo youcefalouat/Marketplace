@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
   const PhoneVerificationScreen({super.key});
@@ -33,13 +34,23 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     super.dispose();
   }
 
+  String? _validatePhone(String value) {
+    final cleaned = value.trim().replaceAll(RegExp(r'[\s\-()]'), '');
+    if (cleaned.isEmpty) return 'Veuillez entrer un numéro de téléphone';
+    if (!RegExp(r'^(\+213|0)\d{9}$').hasMatch(cleaned)) {
+      return 'Format invalide (ex: 0551234567)';
+    }
+    return null;
+  }
+
   Future<void> _sendCode() async {
     final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
+    final phoneError = _validatePhone(phone);
+    if (phoneError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez entrer un numéro de téléphone'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: Text(phoneError),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -55,9 +66,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Code de vérification envoyé !'),
-          backgroundColor: Colors.green,
+        SnackBar(
+            content: Text('Code de vérification envoyé !'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
     } catch (e) {
@@ -66,7 +77,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -76,9 +87,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez entrer le code'),
-          backgroundColor: Colors.red,
+        SnackBar(
+            content: Text('Veuillez entrer le code'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -95,9 +106,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       authProvider.setUser(updatedUser);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Numéro vérifié avec succès !'),
-          backgroundColor: Colors.green,
+        SnackBar(
+            content: Text('Numéro vérifié avec succès !'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
       Navigator.pop(context, true); // Return true = verified
@@ -107,7 +118,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -139,7 +150,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
             Text(
               'Un code de vérification sera envoyé par SMS à votre numéro de téléphone.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).extension<AppColors>()!.textSecondary,
                   ),
               textAlign: TextAlign.center,
             ),
@@ -171,7 +182,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
                       : const Text('Envoyer le code',
                           style: TextStyle(fontSize: 16)),
                 ),
@@ -204,7 +215,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
                       : const Text('Vérifier', style: TextStyle(fontSize: 16)),
                 ),
               ),

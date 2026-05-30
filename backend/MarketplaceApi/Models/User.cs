@@ -63,4 +63,8 @@ public class User
     
     public DateTime? EmailVerificationExpiry { get; set; }
     public bool IsDeleted { get; set; } = false;
+    
+    // FCM Push Notification Token
+    [MaxLength(255)]
+    public string? FcmToken { get; set; }
 }

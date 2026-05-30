@@ -56,7 +56,9 @@ public class AnnonceFeedService : IAnnonceFeedService
                 a.Price,
                 WilayaName = a.Wilaya.Name,
                 CommuneName = a.Commune.Name,
-                Category = a.Category.Name,
+                CategoryId = a.CategoryId,
+                CategoryName = a.Category.Name,
+                CategoryArName = a.Category.ArName,
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 a.IsExchange,
@@ -85,7 +87,10 @@ public class AnnonceFeedService : IAnnonceFeedService
                 Price = a.Price,
                 WilayaName = a.WilayaName,
                 CommuneName = a.CommuneName,
-                Category = a.Category,
+                CategoryId = a.CategoryId,
+                Category = a.CategoryName,
+                CategoryName = a.CategoryName,
+                CategoryArName = a.CategoryArName,
                 MainImageUrl = a.MainImageUrl,
                 MainThumbnailUrl = a.MainThumbnailUrl,
                 IsExchange = a.IsExchange,
@@ -106,4 +111,3 @@ public class AnnonceFeedService : IAnnonceFeedService
         return Task.FromResult(new List<AnnonceListDto>());
     }
 }
-

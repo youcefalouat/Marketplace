@@ -123,3 +123,26 @@ public class VerifyEmailDto
     [Required]
     public string Code { get; set; } = string.Empty;
 }
+
+public class FcmTokenDto
+{
+    [Required]
+    public string Token { get; set; } = string.Empty;
+}
+
+public class PhoneLoginRequestDto
+{
+    [Required]
+    [Phone]
+    public string Phone { get; set; } = string.Empty;
+}
+
+public class PhoneLoginVerifyDto
+{
+    [Required]
+    [Phone]
+    public string Phone { get; set; } = string.Empty;
+
+    [Required]
+    public string Code { get; set; } = string.Empty;
+}

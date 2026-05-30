@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 
 class AdminCategoriesScreen extends StatefulWidget {
   const AdminCategoriesScreen({super.key});
@@ -44,6 +45,8 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
   void _showCategoryDialog({CategoryModel? category, int? parentId}) {
     final isEditing = category != null;
     final nameController = TextEditingController(text: category?.name ?? '');
+    final arNameController =
+        TextEditingController(text: category?.arName ?? '');
     final slugController = TextEditingController(text: category?.slug ?? '');
     bool isSaving = false;
 
@@ -62,6 +65,13 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                     controller: nameController,
                     decoration: const InputDecoration(labelText: 'Nom'),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: arNameController,
+                    textDirection: TextDirection.rtl,
+                    decoration: const InputDecoration(labelText: 'Nom arabe'),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: slugController,
                     decoration: const InputDecoration(labelText: 'Slug'),
@@ -89,12 +99,14 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                               await _apiService.updateCategory(
                                 id: category.id,
                                 name: nameController.text.trim(),
+                                arName: arNameController.text.trim(),
                                 slug: slugController.text.trim(),
                                 parentId: category.parentId, // keep same parent
                               );
                             } else {
                               await _apiService.createCategory(
                                 name: nameController.text.trim(),
+                                arName: arNameController.text.trim(),
                                 slug: slugController.text.trim(),
                                 parentId:
                                     parentId, // Create under parent if any
@@ -157,7 +169,9 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                 }
               }
             },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child: Text('Supprimer',
+                style: TextStyle(
+                    color: Theme.of(context).extension<AppColors>()!.error)),
           ),
         ],
       ),
@@ -175,23 +189,32 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
               style: TextStyle(
                   fontWeight:
                       depth == 0 ? FontWeight.bold : FontWeight.normal)),
-          subtitle: Text('Slug: ${category.slug}'),
+          subtitle: Text(
+            category.arName.isEmpty
+                ? 'Slug: ${category.slug}'
+                : '${category.arName} • ${category.slug}',
+            textDirection:
+                category.arName.isEmpty ? TextDirection.ltr : TextDirection.rtl,
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (depth == 0)
                 IconButton(
-                  icon: const Icon(Icons.add, color: Colors.green),
+                  icon: Icon(Icons.add,
+                      color: Theme.of(context).extension<AppColors>()!.accent),
                   tooltip: 'Ajouter une sous-catégorie',
                   onPressed: () => _showCategoryDialog(parentId: category.id),
                 ),
               IconButton(
-                icon: const Icon(Icons.edit, color: Colors.blue),
+                icon: Icon(Icons.edit,
+                    color: Theme.of(context).extension<AppColors>()!.primary),
                 tooltip: 'Modifier',
                 onPressed: () => _showCategoryDialog(category: category),
               ),
               IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
+                icon: Icon(Icons.delete,
+                    color: Theme.of(context).extension<AppColors>()!.error),
                 tooltip: 'Supprimer',
                 onPressed: () => _deleteCategory(category),
               ),
@@ -237,7 +260,9 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Erreur: $_error', style: const TextStyle(color: Colors.red)),
+            Text('Erreur: $_error',
+                style: TextStyle(
+                    color: Theme.of(context).extension<AppColors>()!.error)),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadCategories,

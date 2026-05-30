@@ -7,9 +7,12 @@ import '../providers/annonces_provider.dart';
 import '../models/models.dart';
 import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
 import 'chat_screen.dart';
 import 'login_screen.dart';
 import '../widgets/star_rating.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/category_localizations.dart';
 
 class AnnonceDetailScreen extends StatefulWidget {
   final int annonceId;
@@ -48,8 +51,8 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Impossible d\'ouvrir l\'application téléphone')),
+          SnackBar(
+              content: Text(AppLocalizations.of(context)!.cannotOpenPhoneApp)),
         );
       }
     }
@@ -60,8 +63,9 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
 
     if (!authProvider.isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Vous devez être connecté pour envoyer un message')),
+        SnackBar(
+            content:
+                Text(AppLocalizations.of(context)!.mustBeLoggedInToMessage)),
       );
       Navigator.push(
         context,
@@ -73,8 +77,8 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     // Don't allow chatting with yourself
     if (authProvider.user?.id == annonce.seller.id) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Vous ne pouvez pas discuter sur votre propre annonce')),
+        SnackBar(
+            content: Text(AppLocalizations.of(context)!.cannotChatWithSelf)),
       );
       return;
     }
@@ -94,6 +98,11 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                   conversation.interlocutorName, // This will be seller name
               annonceId: conversation.annonceId,
               annonceTitle: conversation.annonceTitle,
+              annonceImage: conversation.annonceImage,
+              annoncePrice: conversation.annoncePrice,
+              annonceCategoryName: conversation.annonceCategoryName,
+              annonceCategoryArName: conversation.annonceCategoryArName,
+              annonceStatus: conversation.annonceStatus,
             ),
           ),
         );
@@ -101,7 +110,10 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text(
+                AppLocalizations.of(context)!.errorWithMessage(e.toString())),
+          ),
         );
       }
     }
@@ -109,10 +121,11 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
 
   Future<void> _showRatingDialog(int sellerId, String sellerName) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final colors = Theme.of(context).extension<AppColors>()!;
     if (!authProvider.isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Vous devez être connecté pour noter un vendeur')),
+        SnackBar(
+            content: Text(AppLocalizations.of(context)!.mustBeLoggedInToRate)),
       );
       Navigator.push(
           context, MaterialPageRoute(builder: (_) => const LoginScreen()));
@@ -129,7 +142,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Noter $sellerName'),
+              title: Text(AppLocalizations.of(context)!.rate(sellerName)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -141,7 +154,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                           index < selectedRating
                               ? Icons.star
                               : Icons.star_border,
-                          color: Colors.amber,
+                          color: colors.starRating,
                           size: 32,
                         ),
                         onPressed: () {
@@ -150,12 +163,11 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                       );
                     }),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppLayout.spacing16),
                   TextField(
                     controller: commentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Commentaire (optionnel)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: AppLocalizations.of(context)!.commentOptional,
                     ),
                     maxLines: 3,
                   ),
@@ -164,7 +176,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.pop(context),
-                  child: const Text('Annuler'),
+                  child: Text(AppLocalizations.of(context)!.cancel),
                 ),
                 ElevatedButton(
                   onPressed: (isSubmitting || selectedRating == 0)
@@ -182,9 +194,9 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('Note envoyée avec succès !')),
+                                SnackBar(
+                                    content: Text(AppLocalizations.of(context)!
+                                        .ratingSentSuccess)),
                               );
                               _loadAnnonce(); // reload to show new rating
                             }
@@ -205,7 +217,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Envoyer'),
+                      : Text(AppLocalizations.of(context)!.send),
                 ),
               ],
             );
@@ -215,27 +227,12 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     );
   }
 
-  String _getCategoryLabel(String category) {
-    switch (category.toLowerCase()) {
-      case 'electromenager':
-        return 'Électroménager';
-      case 'meubles':
-        return 'Meubles';
-      case 'literie':
-        return 'Literie';
-      case 'decoration':
-        return 'Décoration';
-      default:
-        return category;
-    }
-  }
-
   String _getStateLabel(String state) {
     switch (state.toLowerCase()) {
       case 'new':
-        return 'Neuf';
+        return AppLocalizations.of(context)!.newCondition;
       case 'used':
-        return 'Occasion';
+        return AppLocalizations.of(context)!.usedCondition;
       default:
         return state;
     }
@@ -259,20 +256,15 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
 
   Widget? _buildBottomBar(BuildContext context, AnnonceDetail? annonce) {
     if (annonce == null) return null;
+    final colors = Theme.of(context).extension<AppColors>()!;
 
     final hasPhone = annonce.showPhone && annonce.phone.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppLayout.screenPadding),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            offset: const Offset(0, -2),
-            blurRadius: 5,
-          ),
-        ],
+        color: colors.surfaceElevated1,
+        border: Border(top: BorderSide(color: colors.border)),
       ),
       child: SafeArea(
         child: Row(
@@ -282,21 +274,19 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () => _callSeller(annonce.phone),
                   icon: const Icon(Icons.phone),
-                  label: const Text('Appeler'),
+                  label: Text(AppLocalizations.of(context)!.call),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
-            if (hasPhone) const SizedBox(width: 16),
+            if (hasPhone) const SizedBox(width: AppLayout.spacing16),
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () => _contactSeller(annonce),
                 icon: const Icon(Icons.message),
-                label: const Text('Contacter'),
+                label: Text(AppLocalizations.of(context)!.contact),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
@@ -308,19 +298,20 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   }
 
   Widget _buildBody(bool isLoading, String? error, AnnonceDetail? annonce) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     if (isLoading || annonce == null) {
       if (error != null) {
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(error),
-              const SizedBox(height: 16),
+              Icon(Icons.error_outline, size: 64, color: colors.textTertiary),
+              const SizedBox(height: AppLayout.spacing16),
+              Text(error, style: TextStyle(color: colors.textSecondary)),
+              const SizedBox(height: AppLayout.spacing16),
               ElevatedButton(
                 onPressed: _loadAnnonce,
-                child: const Text('Réessayer'),
+                child: Text(AppLocalizations.of(context)!.retry),
               ),
             ],
           ),
@@ -333,6 +324,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   }
 
   Widget _buildContent(AnnonceDetail annonce) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     final isGoodDeal = annonce.isGoodDeal;
     final hasSellerRating = annonce.seller.averageRating != null &&
         (annonce.seller.ratingCount ?? 0) > 0;
@@ -350,7 +342,7 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppLayout.screenPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -359,17 +351,20 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                   annonce.title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: colors.textPrimary,
                       ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '${annonce.price.toStringAsFixed(0)} DA',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: isGoodDeal
-                            ? Colors.green.shade700
-                            : Theme.of(context).primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
+                const SizedBox(height: AppLayout.spacing8),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    AppLocalizations.of(context)!
+                        .price(annonce.price.toStringAsFixed(0)),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: isGoodDeal ? colors.accent : colors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
                 if (isGoodDeal) ...[
                   const SizedBox(height: 10),
@@ -377,37 +372,41 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade600.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.green.shade600),
+                      color: colors.accentMuted,
+                      borderRadius: BorderRadius.circular(AppLayout.radiusFull),
+                      border: Border.all(color: colors.accent),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.local_offer_outlined,
-                            size: 16, color: Colors.green.shade700),
-                        const SizedBox(width: 6),
+                            size: 16, color: colors.accent),
+                        const SizedBox(width: AppLayout.spacing6),
                         Text(
-                          'Bonne affaire',
+                          AppLocalizations.of(context)!.goodDeal,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: Colors.green.shade700,
+                            color: colors.accent,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: AppLayout.spacing16),
 
                 // Tags
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: AppLayout.spacing8,
+                  runSpacing: AppLayout.spacing8,
                   children: [
                     _buildTag(
                       icon: Icons.category_outlined,
-                      label: _getCategoryLabel(annonce.category),
+                      label: localizedCategoryText(
+                        context,
+                        annonce.category,
+                        arName: annonce.categoryArName,
+                      ),
                     ),
                     _buildTag(
                       icon: Icons.new_releases_outlined,
@@ -420,109 +419,116 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                     if (annonce.isExchange)
                       _buildTag(
                         icon: Icons.swap_horiz,
-                        label: 'Échange possible',
+                        label: AppLocalizations.of(context)!.exchangePossible,
                       ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppLayout.spacing24),
 
                 // Description
                 Text(
-                  'Description',
+                  AppLocalizations.of(context)!.descriptionTitle,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: colors.textPrimary,
                       ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppLayout.spacing8),
                 Text(
                   annonce.description,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: colors.textSecondary,
+                      ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppLayout.spacing24),
 
                 // Seller Info
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Vendeur',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Theme.of(context)
-                                  .primaryColor
-                                  .withOpacity(0.1),
-                              child: Icon(
-                                Icons.person,
-                                color: Theme.of(context).primaryColor,
-                              ),
+                Container(
+                  padding: const EdgeInsets.all(AppLayout.cardPaddingLarge),
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: AppLayout.borderRadiusMedium,
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppLocalizations.of(context)!.seller,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: colors.textPrimary,
+                                ),
+                      ),
+                      const SizedBox(height: AppLayout.spacing12),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: colors.primaryMuted,
+                            child: Icon(
+                              Icons.person,
+                              color: colors.primary,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    annonce.seller.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
+                          ),
+                          const SizedBox(width: AppLayout.spacing12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  annonce.seller.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                    color: colors.textPrimary,
                                   ),
-                                  if (hasSellerRating) ...[
-                                    const SizedBox(height: 6),
-                                    StarRating(
-                                      average: annonce.seller.averageRating!,
-                                      count: annonce.seller.ratingCount!,
-                                      size: 14,
-                                    ),
-                                  ],
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.location_on_outlined,
-                                        size: 16,
-                                        color: Colors.grey[600],
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${annonce.seller.wilayaName}, ${annonce.seller.communeName}',
-                                        style:
-                                            TextStyle(color: Colors.grey[600]),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  OutlinedButton.icon(
-                                    onPressed: () => _showRatingDialog(
-                                        annonce.seller.id, annonce.seller.name),
-                                    icon: const Icon(Icons.star_outline,
-                                        size: 18),
-                                    label: const Text('Noter ce vendeur'),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
-                                      textStyle: const TextStyle(fontSize: 12),
-                                    ),
+                                ),
+                                if (hasSellerRating) ...[
+                                  const SizedBox(height: AppLayout.spacing6),
+                                  StarRating(
+                                    average: annonce.seller.averageRating!,
+                                    count: annonce.seller.ratingCount!,
+                                    size: 14,
                                   ),
                                 ],
-                              ),
+                                const SizedBox(height: AppLayout.spacing4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on_outlined,
+                                      size: 16,
+                                      color: colors.textTertiary,
+                                    ),
+                                    const SizedBox(width: AppLayout.spacing4),
+                                    Text(
+                                      '${annonce.seller.wilayaName}, ${annonce.seller.communeName}',
+                                      style:
+                                          TextStyle(color: colors.textTertiary),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppLayout.spacing12),
+                                OutlinedButton.icon(
+                                  onPressed: () => _showRatingDialog(
+                                      annonce.seller.id, annonce.seller.name),
+                                  icon:
+                                      const Icon(Icons.star_outline, size: 18),
+                                  label: Text(
+                                      AppLocalizations.of(context)!.rateSeller),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    textStyle: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 100), // Space for bottom button
@@ -535,11 +541,12 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   }
 
   Widget _buildImageGallery(List<ImageUrlDto> imageUrls) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     if (imageUrls.isEmpty) {
       return Container(
-        color: Colors.grey[200],
-        child: const Center(
-          child: Icon(Icons.image, size: 64, color: Colors.grey),
+        color: colors.imagePlaceholder,
+        child: Center(
+          child: Icon(Icons.image, size: 64, color: colors.textTertiary),
         ),
       );
     }
@@ -558,12 +565,12 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
               imageUrl: ApiService.getImageUrl(imageUrl) ?? '',
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
-                color: Colors.grey[200],
+                color: colors.imagePlaceholder,
                 child: const Center(child: CircularProgressIndicator()),
               ),
               errorWidget: (context, url, error) => Container(
-                color: Colors.grey[200],
-                child: const Icon(Icons.error),
+                color: colors.imagePlaceholder,
+                child: Icon(Icons.error, color: colors.textTertiary),
               ),
             );
           },
@@ -583,8 +590,8 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _currentImageIndex == index
-                        ? Colors.white
-                        : Colors.white.withOpacity(0.5),
+                        ? const Color(0xFFFAFAFA)
+                        : const Color(0x80FAFAFA),
                   ),
                 );
               }),
@@ -595,21 +602,22 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   }
 
   Widget _buildTag({required IconData icon, required String label}) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
+        color: colors.primaryMuted,
+        borderRadius: BorderRadius.circular(AppLayout.radiusXL),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Theme.of(context).primaryColor),
-          const SizedBox(width: 4),
+          Icon(icon, size: 16, color: colors.primary),
+          const SizedBox(width: AppLayout.spacing4),
           Text(
             label,
             style: TextStyle(
-              color: Theme.of(context).primaryColor,
+              color: colors.primary,
               fontWeight: FontWeight.w500,
             ),
           ),

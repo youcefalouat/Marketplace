@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/chat_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/star_rating.dart';
 import 'annonce_detail_screen.dart';
 import 'category_annonces_screen.dart';
@@ -12,6 +15,8 @@ import 'create_annonce_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/category_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -145,11 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final unreadMessageCount = context.watch<ChatProvider>().totalUnreadCount;
 
     return Scaffold(
       appBar: _currentIndex == 0
           ? AppBar(
-              title: const Text('Marketplace'),
+              title: const AppLogo(
+                size: 42,
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
               actions: [
                 if (authProvider.isGuest)
                   TextButton(
@@ -159,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
                       );
                     },
-                    child: const Text('Connexion'),
+                    child: Text(AppLocalizations.of(context)!.login),
                   )
                 else
                   IconButton(
@@ -174,31 +183,37 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: _onTapBottomNav,
         type: BottomNavigationBarType.fixed,
-        items: const [
+        items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
-            label: 'Accueil',
+            label: AppLocalizations.of(context)!.home,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.search_outlined),
             activeIcon: Icon(Icons.search),
-            label: 'Recherche',
+            label: AppLocalizations.of(context)!.search,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.add_circle_outline),
             activeIcon: Icon(Icons.add_circle),
-            label: 'Publier',
+            label: AppLocalizations.of(context)!.publish,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.message_outlined),
-            activeIcon: Icon(Icons.message),
-            label: 'Messages',
+            icon: _BottomNavBadge(
+              icon: Icons.message_outlined,
+              count: unreadMessageCount,
+            ),
+            activeIcon: _BottomNavBadge(
+              icon: Icons.message,
+              count: unreadMessageCount,
+            ),
+            label: AppLocalizations.of(context)!.messages,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
-            label: 'Profil',
+            label: AppLocalizations.of(context)!.profile,
           ),
         ],
       ),
@@ -224,22 +239,27 @@ class _HomeScreenState extends State<HomeScreen> {
       onRefresh: _loadAccueilData,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          AppLayout.screenPadding,
+          AppLayout.spacing20,
+          AppLayout.screenPadding,
+          28,
+        ),
         children: [
           Text(
-            'Decouvrir',
+            AppLocalizations.of(context)!.discover,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.spacing16),
           _buildFeaturedSection(),
           const SizedBox(height: 28),
           _buildSectionHeader(
-            title: 'Explorer par categorie',
+            title: AppLocalizations.of(context)!.exploreByCategory,
             subtitle: '',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.spacing12),
           _buildCategorySection(),
         ],
       ),
@@ -250,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required String subtitle,
   }) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,11 +280,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: FontWeight.w700,
               ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppLayout.spacing4),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
+                color: colors.textSecondary,
               ),
         ),
       ],
@@ -271,9 +292,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeaturedSection() {
+    const featuredCarouselHeight = 292.0;
+
     if (_loadingFeatured) {
       return const SizedBox(
-        height: 270,
+        height: featuredCarouselHeight,
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -282,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return _buildInfoCard(
         icon: Icons.error_outline,
         message: _featuredError!,
-        actionLabel: 'Recharger',
+        actionLabel: AppLocalizations.of(context)!.reload,
         onPressed: () {
           setState(() {
             _loadingFeatured = true;
@@ -296,12 +319,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_featuredAnnonces.isEmpty) {
       return _buildInfoCard(
         icon: Icons.inbox_outlined,
-        message: 'Aucune annonce disponible pour le moment.',
+        message: AppLocalizations.of(context)!.noAnnoncesAvailable,
       );
     }
 
     return SizedBox(
-      height: 270,
+      height: featuredCarouselHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _featuredAnnonces.length,
@@ -325,9 +348,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategorySection() {
+    final colors = Theme.of(context).extension<AppColors>()!;
+
     if (_loadingCategories) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
+        padding: EdgeInsets.symmetric(vertical: AppLayout.spacing24),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -336,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return _buildInfoCard(
         icon: Icons.category_outlined,
         message: _categoriesError!,
-        actionLabel: 'Recharger',
+        actionLabel: AppLocalizations.of(context)!.reload,
         onPressed: () {
           setState(() {
             _loadingCategories = true;
@@ -350,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_leafCategories.isEmpty) {
       return _buildInfoCard(
         icon: Icons.category_outlined,
-        message: 'Aucune categorie disponible.',
+        message: AppLocalizations.of(context)!.noCategoriesAvailable,
       );
     }
 
@@ -359,41 +384,35 @@ class _HomeScreenState extends State<HomeScreen> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisSpacing: AppLayout.spacing12,
+        mainAxisSpacing: AppLayout.spacing12,
         childAspectRatio: 1.2,
       ),
       itemCount: _leafCategories.length,
       itemBuilder: (context, index) {
         final category = _leafCategories[index];
+        final categoryName = localizedCategoryName(context, category);
         return InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => CategoryAnnoncesScreen(
                   categoryId: category.id,
-                  categoryName: category.name,
+                  categoryName: categoryName,
                 ),
               ),
             );
           },
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.white,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(color: Colors.blue.shade100),
+              borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
+              color: colors.surfaceElevated1,
+              border: Border.all(color: colors.border),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppLayout.cardPaddingLarge),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -401,29 +420,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade600.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      color: colors.primaryMuted,
+                      borderRadius: AppLayout.borderRadiusMedium,
                     ),
                     child: Icon(
                       _iconForCategory(category.name),
-                      color: Colors.blue.shade700,
+                      color: colors.primary,
                     ),
                   ),
                   const Spacer(),
                   Text(
-                    category.name,
+                    categoryName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
+                      color: colors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppLayout.spacing6),
                   Text(
-                    'Voir les annonces',
+                    AppLocalizations.of(context)!.viewAnnonces,
                     style: TextStyle(
-                      color: Colors.grey[700],
+                      color: colors.textTertiary,
                       fontSize: 13,
                     ),
                   ),
@@ -442,24 +462,25 @@ class _HomeScreenState extends State<HomeScreen> {
     String? actionLabel,
     VoidCallback? onPressed,
   }) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppLayout.spacing20),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
+        border: Border.all(color: colors.border),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 34, color: Colors.grey[600]),
-          const SizedBox(height: 12),
+          Icon(icon, size: 34, color: colors.textTertiary),
+          const SizedBox(height: AppLayout.spacing12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[700]),
+            style: TextStyle(color: colors.textSecondary),
           ),
           if (actionLabel != null && onPressed != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.spacing12),
             OutlinedButton(
               onPressed: onPressed,
               child: Text(actionLabel),
@@ -482,6 +503,63 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _BottomNavBadge extends StatelessWidget {
+  final IconData icon;
+  final int count;
+
+  const _BottomNavBadge({
+    required this.icon,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final label = count > 99 ? '99+' : count.toString();
+
+    return SizedBox(
+      width: 30,
+      height: 26,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Icon(icon),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -2,
+              right: -3,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: colors.error,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: colors.navBarBackground,
+                    width: 1.2,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: colors.textOnPrimary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FeaturedAnnonceCard extends StatelessWidget {
   final AnnonceListItem annonce;
   final VoidCallback onTap;
@@ -493,6 +571,7 @@ class _FeaturedAnnonceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     final hasSellerRating =
         annonce.sellerRating != null && (annonce.sellerRatingCount ?? 0) > 0;
 
@@ -501,17 +580,15 @@ class _FeaturedAnnonceCard extends StatelessWidget {
       child: Container(
         width: 215,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          color: colors.surfaceElevated1,
+          borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
           border: Border.all(
-            color: annonce.isGoodDeal
-                ? Colors.green.shade300
-                : Colors.grey.shade200,
+            color: annonce.isGoodDeal ? colors.accent : colors.border,
             width: annonce.isGoodDeal ? 1.5 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: colors.shadowColor,
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -527,31 +604,34 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
+                      top: Radius.circular(AppLayout.radiusLarge),
                     ),
-                    child: (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
+                    child: (annonce.mainThumbnailUrl != null ||
+                            annonce.mainImageUrl != null)
                         ? CachedNetworkImage(
                             imageUrl: ApiService.getImageUrl(
-                                annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
+                                annonce.mainThumbnailUrl ??
+                                    annonce.mainImageUrl!)!,
                             fit: BoxFit.cover,
                             placeholder: (_, __) => Container(
-                              color: Colors.grey[200],
+                              color: colors.imagePlaceholder,
                               child: const Center(
                                 child: CircularProgressIndicator(),
                               ),
                             ),
                             errorWidget: (_, __, ___) => Container(
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.image_not_supported),
+                              color: colors.imagePlaceholder,
+                              child: Icon(Icons.image_not_supported,
+                                  color: colors.textTertiary),
                             ),
                           )
                         : Container(
-                            color: Colors.grey[200],
-                            child: const Center(
+                            color: colors.imagePlaceholder,
+                            child: Center(
                               child: Icon(
                                 Icons.image_outlined,
                                 size: 42,
-                                color: Colors.grey,
+                                color: colors.textTertiary,
                               ),
                             ),
                           ),
@@ -566,13 +646,14 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade600,
-                          borderRadius: BorderRadius.circular(999),
+                          color: colors.accent,
+                          borderRadius:
+                              BorderRadius.circular(AppLayout.radiusFull),
                         ),
-                        child: const Text(
-                          'Bonne affaire',
+                        child: Text(
+                          AppLocalizations.of(context)!.goodDeal,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: colors.textOnPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -585,7 +666,7 @@ class _FeaturedAnnonceCard extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppLayout.cardPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -593,13 +674,15 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                       annonce.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
+                        height: 1.15,
                         fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
                       ),
                     ),
                     if (hasSellerRating) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: AppLayout.spacing6),
                       StarRating(
                         average: annonce.sellerRating!,
                         count: annonce.sellerRatingCount!,
@@ -607,32 +690,37 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                       ),
                     ],
                     const Spacer(),
-                    Text(
-                      '${annonce.price.toStringAsFixed(0)} DA',
-                      style: TextStyle(
-                        color: annonce.isGoodDeal
-                            ? Colors.green.shade700
-                            : Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        AppLocalizations.of(context)!
+                            .price(annonce.price.toStringAsFixed(0)),
+                        style: TextStyle(
+                          color: annonce.isGoodDeal
+                              ? colors.accent
+                              : colors.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          height: 1.1,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppLayout.spacing6),
                     Row(
                       children: [
                         Icon(
                           Icons.location_on_outlined,
                           size: 14,
-                          color: Colors.grey[600],
+                          color: colors.textTertiary,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: AppLayout.spacing4),
                         Expanded(
                           child: Text(
                             annonce.wilayaName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: colors.textTertiary,
                               fontSize: 12,
                             ),
                           ),

@@ -23,6 +23,22 @@ git clone <repository-url>
 cd marketplace-controlee
 ```
 
+### 1.5. Préparer les variables d'environnement portables
+
+Pour faciliter le changement de PC, de serveur ou de VPS :
+
+```bash
+cp .env.example .env
+```
+
+Ensuite, modifiez `.env` avec les valeurs de votre environnement :
+- `MSSQL_SA_PASSWORD`
+- `MARKETPLACE_DB_NAME`
+- `MARKETPLACE_API_PORT`
+- `JWT_SECRET`
+- `AZURE_STORAGE_*` si utilisé
+- `TWILIO_*` si utilisé
+
 ### 2. Configurer la base de données
 
 L'application utilise Entity Framework Core et créera automatiquement la base de données au premier lancement si elle n'existe pas.
@@ -41,12 +57,10 @@ Si vous avez Docker installé, vous pouvez lancer SQL Server rapidement.
 
 1.  Lancez le conteneur :
     ```bash
-    docker-compose up -d
+    cp .env.example .env
+    docker compose up -d
     ```
-2.  Dans `appsettings.json`, utilisez cette chaîne de connexion :
-    ```json
-    "DefaultConnection": "Server=localhost;Database=MarketplaceDb;User Id=sa;Password=YourStrongPassword123!;TrustServerCertificate=True;"
-    ```
+2.  Le backend lira automatiquement les valeurs de `.env` via `docker-compose.yml`.
 
 #### Option C : SQL Server Express/Instance Locale
 Si vous avez une instance SQL Server complète installée localement :
@@ -74,7 +88,7 @@ Pour le stockage cloud des images, ajouter dans `appsettings.json` :
 
 ### 4. Configurer JWT
 
-Modifier la clé secrète dans `appsettings.json` :
+Modifier la clé secrète dans `appsettings.json` ou, de préférence, dans l'environnement :
 
 ```json
 {
@@ -88,6 +102,11 @@ Modifier la clé secrète dans `appsettings.json` :
 ```
 
 > ⚠️ **Important** : Utilisez une clé secrète unique et complexe en production !
+
+En environnement Docker/VPS, privilégiez :
+- `JwtSettings__SecretKey`
+- `JwtSettings__Issuer`
+- `JwtSettings__Audience`
 
 ### 5. Lancer le backend
 
@@ -122,17 +141,29 @@ flutter doctor
 
 ### 2. Configurer l'URL de l'API
 
-Modifier le fichier `mobile/marketplace_app/lib/services/api_service.dart` :
+L'application mobile supporte maintenant 3 niveaux de configuration :
 
-```dart
-// Pour Android emulator (localhost de la machine hôte)
-static const String baseUrl = 'http://10.0.2.2:5000/api';
+1.  `--dart-define=API_BASE_URL=...` (priorité la plus haute)
+2.  `mobile/marketplace_app/assets/config/app_config.json`
+3.  Fallback automatique local :
+    - Android emulator : `http://10.0.2.2:5000/api`
+    - iOS simulator / Windows / macOS / Web : `http://localhost:5000/api`
 
-// Pour iOS simulator
-// static const String baseUrl = 'http://localhost:5000/api';
+#### Option A : configuration simple par fichier
 
-// Pour un appareil physique ou production
-// static const String baseUrl = 'https://votre-api.azurewebsites.net/api';
+Modifier :
+- `mobile/marketplace_app/assets/config/app_config.json`
+
+```json
+{
+  "apiBaseUrl": "https://api.votre-domaine.com/api"
+}
+```
+
+#### Option B : configuration sans modifier les fichiers
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://api.votre-domaine.com/api
 ```
 
 ### 3. Installer les dépendances
@@ -153,6 +184,9 @@ flutter run -d ios
 
 # Web (debug uniquement)
 flutter run -d chrome
+
+# Avec une API distante / VPS
+flutter run --dart-define=API_BASE_URL=https://api.votre-domaine.com/api
 ```
 
 ---
@@ -174,14 +208,14 @@ flutter run -d chrome
 
 **Android :**
 ```bash
-flutter build apk --release
+flutter build apk --release --dart-define=API_BASE_URL=https://api.votre-domaine.com/api
 # ou pour app bundle
-flutter build appbundle --release
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.votre-domaine.com/api
 ```
 
 **iOS :**
 ```bash
-flutter build ipa --release
+flutter build ipa --release --dart-define=API_BASE_URL=https://api.votre-domaine.com/api
 ```
 
 ---
@@ -231,7 +265,7 @@ marketplace-controlee/
 
 ### Erreur Flutter "Connection refused"
 - Vérifiez que l'API est en cours d'exécution
-- Vérifiez l'URL de l'API dans `api_service.dart`
+- Vérifiez `assets/config/app_config.json` ou `--dart-define=API_BASE_URL=...`
 - Pour Android, utilisez `10.0.2.2` au lieu de `localhost`
 
 ---

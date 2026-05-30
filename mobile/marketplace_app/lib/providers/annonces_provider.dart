@@ -153,6 +153,7 @@ class AnnoncesProvider with ChangeNotifier {
 
   Future<bool> createAnnonce({
     required int categoryId,
+    int? parentCategoryId,
     required String title,
     required String description,
     required double price,
@@ -171,6 +172,7 @@ class AnnoncesProvider with ChangeNotifier {
     try {
       await _apiService.createAnnonce(
         categoryId: categoryId,
+        parentCategoryId: parentCategoryId,
         title: title,
         description: description,
         price: price,
@@ -196,13 +198,13 @@ class AnnoncesProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> deleteAnnonce(int id) async {
+  Future<bool> deleteAnnonce(int id, AnnonceDeletionStatus reason) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _apiService.deleteAnnonce(id);
+      await _apiService.deleteAnnonce(id, reason);
       _myAnnonces.removeWhere((a) => a.id == id);
       _isLoading = false;
       notifyListeners();

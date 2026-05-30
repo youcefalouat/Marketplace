@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "269847662498",
+    "project_id": "marketplace-f1202",
+    "storage_bucket": "marketplace-f1202.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:269847662498:android:baa8c103c7369b23412cfb",
+        "android_client_info": {
+          "package_name": "com.example.marketplace_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "269847662498-n5gjcf8dil621r9l10ugo73e5atqc5of.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.marketplace_app",
+            "certificate_hash": "3d1b0f9e60946dd8bdfb02834966fa767dc485db"
+          }
+        },
+        {
+          "client_id": "269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdmdtcJBNLWBcO9p3UbJ6BdgvEhl3RFdc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

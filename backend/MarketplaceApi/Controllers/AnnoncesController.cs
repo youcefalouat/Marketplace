@@ -18,19 +18,22 @@ public class AnnoncesController : ControllerBase
     private readonly IImageProcessingService _imageProcessing;
     private readonly IRatingService _ratingService;
     private readonly IAnnonceFeedService _feedService;
+    private readonly ILogger<AnnoncesController> _logger;
     
     public AnnoncesController(
         ApplicationDbContext context,
         IBlobStorageService blobStorage,
         IImageProcessingService imageProcessing,
         IRatingService ratingService,
-        IAnnonceFeedService feedService)
+        IAnnonceFeedService feedService,
+        ILogger<AnnoncesController> logger)
     {
         _context = context;
         _blobStorage = blobStorage;
         _imageProcessing = imageProcessing;
         _ratingService = ratingService;
         _feedService = feedService;
+        _logger = logger;
     }
     
     /// <summary>
@@ -67,7 +70,8 @@ public class AnnoncesController : ControllerBase
             query = query.Where(a => 
                 a.Title.ToLower().Contains(searchStr) || 
                 a.Description.ToLower().Contains(searchStr) ||
-                a.Category.Name.ToLower().Contains(searchStr));
+                a.Category.Name.ToLower().Contains(searchStr) ||
+                a.Category.ArName.ToLower().Contains(searchStr));
         }
         
         if (filter.MinPrice.HasValue)
@@ -103,7 +107,9 @@ public class AnnoncesController : ControllerBase
                 Price = a.Price,
                 WilayaName = a.Wilaya.Name,
                 CommuneName = a.Commune.Name,
-                Category = a.Category.Name,
+                CategoryId = a.CategoryId,
+                CategoryName = a.Category.Name,
+                CategoryArName = a.Category.ArName,
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 IsExchange = a.IsExchange,
@@ -131,7 +137,10 @@ public class AnnoncesController : ControllerBase
                 Price = a.Price,
                 WilayaName = a.WilayaName,
                 CommuneName = a.CommuneName,
-                Category = a.Category,
+                CategoryId = a.CategoryId,
+                Category = a.CategoryName,
+                CategoryName = a.CategoryName,
+                CategoryArName = a.CategoryArName,
                 MainImageUrl = a.MainImageUrl,
                 MainThumbnailUrl = a.MainThumbnailUrl,
                 IsExchange = a.IsExchange,
@@ -157,6 +166,16 @@ public class AnnoncesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<AnnonceDetailDto>> GetAnnonce(int id)
     {
+        _logger.LogInformation("GetAnnonce requested for ID {AnnonceId}", id);
+
+        // First check if the annonce exists at all
+        var annonceExists = await _context.Annonces.AnyAsync(a => a.Id == id);
+        if (!annonceExists)
+        {
+            _logger.LogWarning("Annonce {AnnonceId} does not exist in database", id);
+            return NotFound(new { message = "Cette annonce n'existe pas." });
+        }
+
         var annonce = await _context.Annonces
             .Include(a => a.Images)
             .Include(a => a.User).ThenInclude(u => u.Wilaya)
@@ -168,10 +187,17 @@ public class AnnoncesController : ControllerBase
         
         if (annonce == null)
         {
-            return NotFound();
+            // Annonce exists but is not approved
+            var status = await _context.Annonces
+                .Where(a => a.Id == id)
+                .Select(a => a.Status)
+                .FirstAsync();
+            _logger.LogInformation("Annonce {AnnonceId} exists but has status {Status}", id, status);
+            return NotFound(new { message = "Cette annonce a été supprimée ou n'est plus disponible.", status = status.ToString() });
         }
         
         var sellerRating = await _ratingService.GetSellerSummaryAsync(annonce.UserId);
+        _logger.LogInformation("Returning annonce detail for ID {AnnonceId}", id);
         return Ok(MapToDetailDto(annonce, sellerRating));
     }
 
@@ -215,6 +241,22 @@ public class AnnoncesController : ControllerBase
         if (images != null && images.Count > 5)
         {
             return BadRequest(new { message = "Maximum 5 images autorisées" });
+        }
+
+        var selectedCategory = await _context.Categories
+            .AsNoTracking()
+            .Where(c => c.Id == dto.CategoryId)
+            .Select(c => new { c.Id, c.ParentId })
+            .FirstOrDefaultAsync();
+        if (selectedCategory == null)
+        {
+            return BadRequest(new { message = "Catégorie invalide" });
+        }
+
+        if (dto.ParentCategoryId.HasValue &&
+            selectedCategory.ParentId != dto.ParentCategoryId.Value)
+        {
+            return BadRequest(new { message = "La catégorie parente ne correspond pas à la catégorie sélectionnée" });
         }
         
         var wilayaId = dto.WilayaId ?? user.WilayaId;
@@ -325,7 +367,10 @@ public class AnnoncesController : ControllerBase
                 Id = a.Id,
                 Title = a.Title,
                 Price = a.Price,
+                CategoryId = a.CategoryId,
                 Category = a.Category.Name,
+                CategoryName = a.Category.Name,
+                CategoryArName = a.Category.ArName,
                 Status = a.Status.ToString(),
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
@@ -344,9 +389,9 @@ public class AnnoncesController : ControllerBase
     /// <summary>
     /// Delete an annonce (owner only)
     /// </summary>
-    [HttpDelete("{id}")]
+    [HttpPost("{id}/delete")]
     [Authorize]
-    public async Task<IActionResult> DeleteAnnonce(int id)
+    public async Task<ActionResult<MyAnnonceDto>> DeleteAnnonce(int id, [FromBody] DeleteAnnonceDto dto)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -366,18 +411,24 @@ public class AnnoncesController : ControllerBase
         {
             return Forbid();
         }
-        
-        // Delete images and thumbnails from storage
-        foreach (var image in annonce.Images)
+
+        if (!IsSoftDeleteStatus(dto.Status))
         {
-            await _blobStorage.DeleteImageWithThumbnailsAsync(
-                image.ImagePath, image.ThumbnailSmallPath, image.ThumbnailMediumPath);
+            return BadRequest(new
+            {
+                message = "Le statut de suppression doit être Vendu, Archivé ou Supprimé"
+            });
         }
-        
-        _context.Annonces.Remove(annonce);
+
+        annonce.Status = dto.Status;
+        annonce.DeletedAt = DateTime.UtcNow;
+        annonce.DeletedBy = userId.Value;
         await _context.SaveChangesAsync();
-        
-        return NoContent();
+
+        var updatedAnnonce = await BuildMyAnnonceDtoQuery(id)
+            .FirstAsync();
+
+        return Ok(updatedAnnonce);
     }
     
     // Fix #2: Return nullable int and Unauthorized instead of defaulting to 0
@@ -405,7 +456,10 @@ public class AnnoncesController : ControllerBase
             Title = annonce.Title,
             Description = annonce.Description,
             Price = annonce.Price,
+            CategoryId = annonce.CategoryId,
             Category = annonce.Category.Name,
+            CategoryName = annonce.Category.Name,
+            CategoryArName = annonce.Category.ArName,
             State = annonce.State.ToString(),
             Phone = annonce.ShowPhone ? annonce.Phone : string.Empty,
             ShowPhone = annonce.ShowPhone,
@@ -437,6 +491,37 @@ public class AnnoncesController : ControllerBase
         
         return dto;
     }
+
+    private IQueryable<MyAnnonceDto> BuildMyAnnonceDtoQuery(int annonceId)
+    {
+        return _context.Annonces
+            .AsNoTracking()
+            .Include(a => a.Images)
+            .Include(a => a.Category)
+            .Where(a => a.Id == annonceId)
+            .Select(a => new MyAnnonceDto
+            {
+                Id = a.Id,
+                Title = a.Title,
+                Price = a.Price,
+                CategoryId = a.CategoryId,
+                Category = a.Category.Name,
+                CategoryName = a.Category.Name,
+                CategoryArName = a.Category.ArName,
+                Status = a.Status.ToString(),
+                MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
+                IsGoodDeal = a.IsGoodDeal,
+                ModerationThreadId = _context.Conversations
+                    .Where(t => t.AnnonceId == a.Id && t.IsModeration)
+                    .Select(t => (int?)t.Id)
+                    .FirstOrDefault(),
+                CreatedAt = a.CreatedAt
+            });
+    }
+
+    private static bool IsSoftDeleteStatus(AnnonceStatus status) =>
+        status is AnnonceStatus.Sold or AnnonceStatus.Archived or AnnonceStatus.Deleted;
     
     // Fix #15: Single query to load all categories, then traverse in-memory
     private async Task<List<int>> GetCategoryAndSubcategoryIds(int categoryId)

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 import 'home_screen.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
@@ -72,9 +73,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedWilaya == null || _selectedCommune == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Veuillez sélectionner votre wilaya et commune'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -100,7 +101,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.error ?? 'Erreur lors de la mise à jour'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -150,7 +151,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               _loadingWilayas
                   ? const Center(child: CircularProgressIndicator())
                   : DropdownButtonFormField<Wilaya>(
-                      value: _selectedWilaya,
+                      initialValue: _selectedWilaya,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Wilaya',
@@ -181,7 +182,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               _loadingCommunes
                   ? const Center(child: CircularProgressIndicator())
                   : DropdownButtonFormField<Commune>(
-                      value: _selectedCommune,
+                      initialValue: _selectedCommune,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Commune',
@@ -222,7 +223,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                         ),
                       ),
                       child: auth.isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? CircularProgressIndicator(
+                              color: Theme.of(context)
+                                  .extension<AppColors>()!
+                                  .textOnPrimary)
                           : const Text(
                               'Terminer',
                               style: TextStyle(fontSize: 16),

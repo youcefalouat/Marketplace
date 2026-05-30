@@ -7,6 +7,9 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/annonces_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
+import '../widgets/hierarchical_category_selector.dart';
 import 'phone_verification_screen.dart';
 
 class CreateAnnonceScreen extends StatefulWidget {
@@ -23,8 +26,9 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   final _priceController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  CategoryModel? _selectedParentCategory;
-  CategoryModel? _selectedSubCategory;
+  HierarchicalCategorySelection? _selectedCategorySelection;
+  int? _selectedParentCategoryId;
+  int? _selectedCategoryId;
   List<CategoryModel> _apiCategories = [];
   bool _loadingCategories = true;
   int _selectedState = 0;
@@ -40,8 +44,6 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   Commune? _selectedCommune;
   bool _loadingWilayas = true;
   bool _loadingCommunes = false;
-
-  final List<String> _states = ['Neuf', 'Occasion'];
 
   bool _isPickingImage = false;
   bool _isSubmitting = false; // New state variable for submission
@@ -63,9 +65,9 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            title: const Text('Vérification requise'),
-            content: const Text(
-              'Vous devez vérifier votre numéro de téléphone avant de publier une annonce.',
+            title: Text(AppLocalizations.of(context)!.verificationRequired),
+            content: Text(
+              AppLocalizations.of(context)!.phoneVerificationRequiredMessage,
             ),
             actions: [
               TextButton(
@@ -73,7 +75,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                   Navigator.pop(ctx);
                   Navigator.pop(context); // Go back
                 },
-                child: const Text('Annuler'),
+                child: Text(AppLocalizations.of(context)!.cancel),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -88,7 +90,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                     Navigator.pop(context); // Not verified, go back
                   }
                 },
-                child: const Text('Vérifier'),
+                child: Text(AppLocalizations.of(context)!.verify),
               ),
             ],
           ),
@@ -176,7 +178,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
     if (_images.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 5 photos autorisées')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.maxFivePhotos)),
       );
       return;
     }
@@ -208,7 +210,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
     if (_images.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 5 photos autorisées')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.maxFivePhotos)),
       );
       return;
     }
@@ -244,38 +246,26 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
     if (_images.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez ajouter au moins une photo'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.addAtLeastOnePhoto),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
     }
 
-    if (_selectedParentCategory == null) {
+    final selectedCategory = _selectedCategorySelection;
+    if (selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez sélectionner une catégorie'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.selectCategoryValidation),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
     }
 
-    // Require subcategory if parent has them
-    if (_selectedParentCategory!.subCategories.isNotEmpty &&
-        _selectedSubCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez sélectionner une sous-catégorie'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final int finalCategoryId =
-        _selectedSubCategory?.id ?? _selectedParentCategory!.id;
+    final int finalCategoryId = selectedCategory.selectedCategoryId;
 
     final provider = Provider.of<AnnoncesProvider>(context, listen: false);
 
@@ -288,13 +278,16 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
     } catch (e) {
       if (mounted) setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors de la compression des images: $e')),
+        SnackBar(
+            content: Text(AppLocalizations.of(context)!
+                .imageCompressionError(e.toString()))),
       );
       return;
     }
 
     final success = await provider.createAnnonce(
       categoryId: finalCategoryId,
+      parentCategoryId: _selectedParentCategoryId,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       price: double.parse(_priceController.text),
@@ -312,17 +305,18 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Annonce créée ! En attente de validation.'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.annonceCreatedPending),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.error ?? 'Erreur lors de la création'),
-          backgroundColor: Colors.red,
+          content: Text(
+              provider.error ?? AppLocalizations.of(context)!.creationError),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
     }
@@ -330,9 +324,12 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final states = [l10n.newCondition, l10n.usedCondition];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nouvelle annonce'),
+        title: Text(l10n.newAnnonce),
       ),
       body: Form(
         key: _formKey,
@@ -341,7 +338,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
           children: [
             // Photos section
             Text(
-              'Photos (${_images.length}/5)',
+              l10n.photosCount(_images.length),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -352,72 +349,35 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
             // Category
             Text(
-              'Catégorie',
+              l10n.category,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             _loadingCategories
                 ? const Center(child: CircularProgressIndicator())
-                : DropdownButtonFormField<CategoryModel>(
-                    value: _selectedParentCategory,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Catégorie principale',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: _apiCategories
-                        .map((c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(c.name),
-                            ))
-                        .toList(),
-                    onChanged: (category) {
+                : HierarchicalCategorySelector(
+                    categories: _apiCategories,
+                    selectedCategoryId: _selectedCategoryId,
+                    labelText: l10n.category,
+                    hintText: l10n.allCategories,
+                    onlyLeafSelection: true,
+                    validator: (selection) => selection == null
+                        ? l10n.selectCategoryValidation
+                        : null,
+                    onChanged: (selection) {
                       setState(() {
-                        _selectedParentCategory = category;
-                        _selectedSubCategory = null; // Reset subcategory
+                        _selectedCategorySelection = selection;
+                        _selectedCategoryId = selection?.selectedCategoryId;
+                        _selectedParentCategoryId = selection?.parentCategoryId;
                       });
                     },
-                    validator: (val) => val == null
-                        ? 'Veuillez sélectionner une catégorie'
-                        : null,
                   ),
             const SizedBox(height: 16),
 
-            // Subcategory Dropdown (conditionally shown)
-            if (_selectedParentCategory != null &&
-                _selectedParentCategory!.subCategories.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: DropdownButtonFormField<CategoryModel>(
-                  value: _selectedSubCategory,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Sous-catégorie',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: _selectedParentCategory!.subCategories
-                      .map((c) => DropdownMenuItem(
-                            value: c,
-                            child: Text(c.name),
-                          ))
-                      .toList(),
-                  onChanged: (category) {
-                    setState(() => _selectedSubCategory = category);
-                  },
-                  validator: (val) => val == null
-                      ? 'Veuillez sélectionner une sous-catégorie'
-                      : null,
-                ),
-              ),
-
             // State
             Text(
-              'État',
+              l10n.condition,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -425,9 +385,9 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              children: List.generate(_states.length, (index) {
+              children: List.generate(states.length, (index) {
                 return ChoiceChip(
-                  label: Text(_states[index]),
+                  label: Text(states[index]),
                   selected: _selectedState == index,
                   onSelected: (selected) {
                     if (selected) setState(() => _selectedState = index);
@@ -442,17 +402,17 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               controller: _titleController,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                labelText: 'Titre',
+                labelText: l10n.title,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Veuillez entrer un titre';
+                  return l10n.enterTitle;
                 }
                 if (value.length < 5) {
-                  return 'Le titre doit contenir au moins 5 caractères';
+                  return l10n.titleMinLength;
                 }
                 return null;
               },
@@ -465,7 +425,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               textCapitalization: TextCapitalization.sentences,
               maxLines: 4,
               decoration: InputDecoration(
-                labelText: 'Description',
+                labelText: l10n.descriptionTitle,
                 alignLabelWithHint: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -473,10 +433,10 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Veuillez entrer une description';
+                  return l10n.enterDescription;
                 }
                 if (value.length < 20) {
-                  return 'La description doit contenir au moins 20 caractères';
+                  return l10n.descriptionMinLength;
                 }
                 return null;
               },
@@ -488,7 +448,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               controller: _priceController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Prix (DA)',
+                labelText: l10n.priceDa,
                 prefixIcon: const Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -496,11 +456,11 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Veuillez entrer un prix';
+                  return l10n.enterPrice;
                 }
                 final price = double.tryParse(value);
                 if (price == null || price <= 0) {
-                  return 'Prix invalide';
+                  return l10n.invalidPrice;
                 }
                 return null;
               },
@@ -509,9 +469,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
             // IsExchange toggle
             SwitchListTile(
-              title: const Text('Échange possible'),
-              subtitle:
-                  const Text('L\'article peut être échangé contre un autre'),
+              title: Text(l10n.exchangePossible),
+              subtitle: Text(l10n.exchangeSubtitle),
               value: _isExchange,
               onChanged: (value) => setState(() => _isExchange = value),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
@@ -523,7 +482,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               controller: _phoneController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                labelText: 'Téléphone',
+                labelText: l10n.phone,
                 prefixIcon: const Icon(Icons.phone),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -531,7 +490,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Veuillez entrer un numéro de téléphone';
+                  return l10n.enterPhone;
                 }
                 return null;
               },
@@ -540,9 +499,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
             // Show Phone toggle
             SwitchListTile(
-              title: const Text('Afficher mon numéro'),
-              subtitle: const Text(
-                  'Si désactivé, les utilisateurs ne pourront pas vous appeler directement'),
+              title: Text(l10n.showPhone),
+              subtitle: Text(l10n.showPhoneSubtitle),
               value: _showPhone,
               onChanged: (value) => setState(() => _showPhone = value),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
@@ -553,10 +511,10 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             _loadingWilayas
                 ? const Center(child: CircularProgressIndicator())
                 : DropdownButtonFormField<Wilaya>(
-                    value: _selectedWilaya,
+                    initialValue: _selectedWilaya,
                     isExpanded: true,
                     decoration: InputDecoration(
-                      labelText: 'Wilaya',
+                      labelText: l10n.wilaya,
                       prefixIcon: const Icon(Icons.location_city),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -579,10 +537,10 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             _loadingCommunes
                 ? const Center(child: CircularProgressIndicator())
                 : DropdownButtonFormField<Commune>(
-                    value: _selectedCommune,
+                    initialValue: _selectedCommune,
                     isExpanded: true,
                     decoration: InputDecoration(
-                      labelText: 'Commune',
+                      labelText: l10n.commune,
                       prefixIcon: const Icon(Icons.location_on),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -608,18 +566,22 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                 return SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: (provider.isLoading || _isSubmitting) ? null : _submit,
+                    onPressed:
+                        (provider.isLoading || _isSubmitting) ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child: (provider.isLoading || _isSubmitting)
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? CircularProgressIndicator(
+                            color: Theme.of(context)
+                                .extension<AppColors>()!
+                                .textOnPrimary)
                         : Text(
                             _isSubmitting
-                                ? 'Compression & Envoi...'
-                                : 'Publier l\'annonce',
+                                ? l10n.compressingAndSending
+                                : l10n.publishAnnonce,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -640,7 +602,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
     return Container(
       height: 120,
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
+        border:
+            Border.all(color: Theme.of(context).extension<AppColors>()!.border),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListView(
@@ -651,13 +614,13 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
           if (_images.length < 5) ...[
             _buildAddPhotoButton(
               icon: Icons.photo_library,
-              label: 'Galerie',
+              label: AppLocalizations.of(context)!.gallery,
               onTap: _pickImages,
             ),
             const SizedBox(width: 8),
             _buildAddPhotoButton(
               icon: Icons.camera_alt,
-              label: 'Photo',
+              label: AppLocalizations.of(context)!.photo,
               onTap: _takePhoto,
             ),
             const SizedBox(width: 8),
@@ -684,14 +647,17 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
                       onTap: () => _removeImage(entry.key),
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).extension<AppColors>()!.error,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 16,
-                          color: Colors.white,
+                          color: Theme.of(context)
+                              .extension<AppColors>()!
+                              .textOnPrimary,
                         ),
                       ),
                     ),
@@ -716,19 +682,22 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
         width: 100,
         height: 100,
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: Theme.of(context).extension<AppColors>()!.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(
+              color: Theme.of(context).extension<AppColors>()!.border),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 32, color: Colors.grey[600]),
+            Icon(icon,
+                size: 32,
+                color: Theme.of(context).extension<AppColors>()!.textTertiary),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: Colors.grey[600],
+                color: Theme.of(context).extension<AppColors>()!.textTertiary,
                 fontSize: 12,
               ),
             ),

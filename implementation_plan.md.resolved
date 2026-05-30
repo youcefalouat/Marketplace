@@ -1,0 +1,69 @@
+# Marketplace Enhancement — Implementation Plan
+
+This updated plan incorporates feedback to simplify the deletion architecture by removing the dedicated reason table and instead expanding the `AnnonceStatus` enum.
+
+---
+
+## 1. Annonce Deletion (Status-Based Soft Delete)
+Instead of a separate table for deletion reasons, we will use status updates along with audit fields.
+
+### Backend Changes (`MarketplaceApi`)
+- **Models**:
+  - `Enums.cs`: Add `Sold = 4`, `Archived = 5`, and `Deleted = 6` to the `AnnonceStatus` enum. (This maps to "Vendu", "Archivé", and "Supprimé").
+  - `Annonce.cs`: Add `DateTime? DeletedAt` and `int? DeletedBy`.
+- **DTOs**: Add `DeleteAnnonceDto` requiring the new `AnnonceStatus` mapping to the user's choice.
+- **Controller**: Replace `HttpDelete("{id}")` with `HttpPost("{id}/delete")` in `AnnoncesController`. Update the annonce's `Status` to the provided one (`Sold`/`Archived`/`Deleted`), populate `DeletedAt` and `DeletedBy`, and save to the database.
+
+### Frontend Changes (`marketplace_app`)
+- **API Service**: Update `deleteAnnonce` to hit the new POST endpoint and pass the selected status.
+- **UI (`my_annonces_screen.dart`)**: Replace the standard confirmation modal with a multi-step dialog:
+  - Radio buttons for `Vendu` (maps to Sold), `Archivé / Ne veux plus vendre` (maps to Archived), and `Erreur / Supprimé` (maps to Deleted).
+  - Disable "Confirm" unless a status is selected.
+
+---
+
+## 2. Real-Time Chat & Lazy Discussion Creation
+
+### Backend Changes (`MarketplaceApi`)
+- **Lazy Creation (`ChatController.cs`)**:
+  - `StartConversation`: Returns a temporary DTO without creating a DB record (ID can be negative or 0). 
+  - `SendMessage`: Detects if it's the first message (meaning the ID doesn't exist). If so, it creates the DB `Conversation` and the `Message` atomically.
+- **SignalR Groups (`ChatHub.cs`)**: Override `OnConnectedAsync` to map the `Context.ConnectionId` to a `user_{UserId}` group. This lets us target specific users regardless of which conversation screen they are on.
+
+### Frontend Changes (`marketplace_app`)
+- **Connection Scope (`chat_provider.dart`)**: Connect SignalR at the root app level (post-login) so real-time push events work everywhere.
+- **UI Details (`chat_screen.dart`)**: Accommodate the pending conversation state. Send the `annonceId` alongside `sendMessage` so the backend can create the conversation if needed.
+
+---
+
+## 3. Dark Mode (Persistent Local)
+- Create `ThemeProvider` backed by `shared_preferences` to toggle and persist user themes locally. No backend user profile sync is required.
+- Add toggle inside `profile_screen.dart`.
+- Bind `MaterialApp.themeMode` to `ThemeProvider`.
+
+---
+
+## 4. Notifications System (Both SignalR & FCM)
+We will leverage a fallback system on the Backend.
+### Backend Changes
+- Implement `INotificationService`.
+- When a push event (new message, status approved) is triggered:
+  - Check if the user is connected to SignalR (track via `ChatHub`).
+  - **If online**: Emit event via SignalR `user_{UserId}` group.
+  - **If offline**: Send a push notification using Firebase Cloud Messaging (FCM).
+
+### Frontend Changes
+- Integrate `firebase_messaging` to receive FCM push notifications when the app is in the background/killed.
+
+---
+
+## 5. UI Layout Fixes (Keyboard, SafeArea, Overflows)
+- **Keyboard Bug (`chat_screen.dart`)**: Remove heavy `addPostFrameCallback` from the build cycle leading to extreme lag. Optimize standard layout with properly separated scroll logic.
+- **Navigation Bar Overlaps**: Force `SafeArea` wrappers on specific heavily-impacted screens (Home, Profile, Search).
+- **Star Rating Overflow**: Update `star_rating.dart` to use `FittedBox` + `Flexible` to ensure star arrays adapt dynamically to bounded width areas instead of throwing horizontal overflow errors.
+
+---
+
+## 6. Network Error Fix
+- **Centralized Client (`api_service.dart`)**: Change from floating `http.get`/`post` commands to maintaining a global `http.Client()` instance. Implement robust retry-backoff logic for intermittent socket tears ("Connection closed before full header was received").
+- **Backend ASP.NET Core**: Set tighter keep-alive and request constraints if needed in `Program.cs`.

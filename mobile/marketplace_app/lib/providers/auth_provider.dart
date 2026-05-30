@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/social_auth_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class AuthProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -31,6 +33,7 @@ class AuthProvider with ChangeNotifier {
       final isAuth = await _apiService.isAuthenticated();
       if (isAuth) {
         _user = _apiService.currentUser;
+        _updateFcmToken();
       }
     } catch (e) {
       _user = null;
@@ -38,6 +41,19 @@ class AuthProvider with ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _updateFcmToken() async {
+    try {
+      if (!kIsWeb) {
+        String? token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          await _apiService.updateFcmToken(token);
+        }
+      }
+    } catch (e) {
+      debugPrint('Erreur FCM Token: $e');
+    }
   }
 
   // Register
@@ -63,6 +79,7 @@ class AuthProvider with ChangeNotifier {
         communeId: communeId,
       );
       _user = authResponse.user;
+      _updateFcmToken();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -89,6 +106,7 @@ class AuthProvider with ChangeNotifier {
         password: password,
       );
       _user = authResponse.user;
+      _updateFcmToken();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -100,7 +118,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Social login (Google / Facebook)
+  // Social login (Google)
   Future<bool> socialLogin({
     required String provider,
     required String providerId,
@@ -121,6 +139,48 @@ class AuthProvider with ChangeNotifier {
         accessToken: accessToken,
       );
       _user = authResponse.user;
+      _updateFcmToken();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─── Phone OTP Login ───
+
+  /// Request an OTP code for phone-based login/registration.
+  Future<void> requestPhoneOtp(String phone) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _apiService.requestPhoneLoginOtp(phone);
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Verify phone OTP and log in (or create account).
+  Future<bool> verifyPhoneOtp(String phone, String code) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final authResponse = await _apiService.verifyPhoneLoginOtp(phone, code);
+      _user = authResponse.user;
+      _updateFcmToken();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -189,6 +249,7 @@ class AuthProvider with ChangeNotifier {
   // Logout
   Future<void> logout() async {
     await _apiService.logout();
+    await SocialAuthService.signOut();
     _user = null;
     notifyListeners();
   }

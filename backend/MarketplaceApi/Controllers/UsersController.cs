@@ -113,4 +113,25 @@ public class UsersController : ControllerBase
             return null;
         return userId;
     }
+
+    /// <summary>
+    /// Update current user FCM Token for push notifications
+    /// </summary>
+    [HttpPost("fcm-token")]
+    public async Task<IActionResult> UpdateFcmToken([FromBody] FcmTokenDto dto)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId.Value);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        user.FcmToken = dto.Token;
+        await _context.SaveChangesAsync();
+        
+        return Ok();
+    }
 }

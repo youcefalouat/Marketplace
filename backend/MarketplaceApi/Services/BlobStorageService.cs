@@ -36,13 +36,22 @@ public class BlobStorageService : IBlobStorageService
 {
     private readonly BlobServiceClient? _blobServiceClient;
     private readonly ILogger<BlobStorageService> _logger;
+    private readonly string _webRootPath;
 
-    public BlobStorageService(IConfiguration configuration, ILogger<BlobStorageService> logger)
+    public BlobStorageService(
+        IConfiguration configuration,
+        IWebHostEnvironment environment,
+        ILogger<BlobStorageService> logger)
     {
         var connectionString = configuration["AzureStorage:ConnectionString"];
         _logger = logger;
+        _webRootPath = string.IsNullOrWhiteSpace(environment.WebRootPath)
+            ? Path.Combine(environment.ContentRootPath, "wwwroot")
+            : environment.WebRootPath;
 
-        if (!string.IsNullOrEmpty(connectionString))
+        Directory.CreateDirectory(_webRootPath);
+
+        if (!string.IsNullOrWhiteSpace(connectionString))
         {
             _blobServiceClient = new BlobServiceClient(connectionString);
         }
@@ -100,10 +109,8 @@ public class BlobStorageService : IBlobStorageService
         string thumbSmallFileName,
         string thumbMediumFileName)
     {
-        var wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-
         // Main image
-        var mainDir = Path.Combine(wwwroot, basePath.Replace('/', Path.DirectorySeparatorChar));
+        var mainDir = Path.Combine(_webRootPath, basePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(mainDir);
         var mainFilePath = Path.Combine(mainDir, mainFileName);
         await WriteStreamToFileAsync(result.OptimizedImage, mainFilePath);
@@ -141,8 +148,7 @@ public class BlobStorageService : IBlobStorageService
     {
         // Support both old /uploads/ and new /images/ paths
         var localPath = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "wwwroot",
+            _webRootPath,
             relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
 
         if (File.Exists(localPath))

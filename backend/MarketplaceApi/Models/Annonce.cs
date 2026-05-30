@@ -46,6 +46,10 @@ public class Annonce
     public AnnonceStatus Status { get; set; } = AnnonceStatus.Pending;
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? DeletedAt { get; set; }
+
+    public int? DeletedBy { get; set; }
     
     // Admin internal fields
     [Column(TypeName = "decimal(18,2)")]

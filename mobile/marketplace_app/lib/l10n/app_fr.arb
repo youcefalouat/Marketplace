@@ -1,0 +1,145 @@
+{
+  "@@locale": "fr",
+  "appTitle": "Marketplace Contrôlée",
+  "myProfile": "Mon profil",
+  "language": "Langue",
+  "darkMode": "Mode sombre",
+  "saveTheme": "Enregistrer le theme sur cet appareil",
+  "home": "Accueil",
+  "search": "Recherche",
+  "publish": "Publier",
+  "messages": "Messages",
+  "marketplaceListing": "Petite annonce Marketplace",
+  "viewDetails": "Voir les détails",
+  "moreOptions": "Plus d'options",
+  "listingAvailable": "Annonce disponible",
+  "noMessages": "Aucun message",
+  "sendFirstMessage": "Envoyez le premier message",
+  "chatMessageHint": "Votre message...",
+  "startConversation": "Démarrer la conversation",
+  "profile": "Profil",
+  "myAnnonces": "Mes annonces",
+  "logout": "Déconnexion",
+  "cancel": "Annuler",
+  "save": "Enregistrer",
+  "login": "Connexion",
+  "discover": "Découvrir",
+  "exploreByCategory": "Explorer par catégorie",
+  "noAnnoncesAvailable": "Aucune annonce disponible pour le moment.",
+  "noCategoriesAvailable": "Aucune categorie disponible.",
+  "reload": "Recharger",
+  "viewAnnonces": "Voir les annonces",
+  "goodDeal": "Bonne affaire",
+  "price": "{amount} DA",
+  "@price": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "call": "Appeler",
+  "contact": "Contacter",
+  "descriptionTitle": "Description",
+  "seller": "Vendeur",
+  "rateSeller": "Noter ce vendeur",
+  "ratingSentSuccess": "Note envoyée avec succès !",
+  "cannotOpenPhoneApp": "Impossible d'ouvrir l'application téléphone",
+  "mustBeLoggedInToMessage": "Vous devez être connecté pour envoyer un message",
+  "cannotChatWithSelf": "Vous ne pouvez pas discuter sur votre propre annonce",
+  "mustBeLoggedInToRate": "Vous devez être connecté pour noter un vendeur",
+  "retry": "Réessayer",
+  "send": "Envoyer",
+  "commentOptional": "Commentaire (optionnel)",
+  "rate": "Noter {name}",
+  "@rate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filters": "Filtres",
+  "reset": "Réinitialiser",
+  "category": "Catégorie",
+  "allCategories": "Toutes les catégories",
+  "all": "Toutes",
+  "subCategory": "Sous-catégorie",
+  "wilayas": "Wilayas",
+  "selectWilayas": "Sélectionner Wilayas",
+  "allWilayas": "Toutes les wilayas",
+  "communes": "Communes",
+  "selectCommunes": "Sélectionner Communes",
+  "allCommunes": "Toutes les communes",
+  "selectedCount": "{count} sélectionnée(s)",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "min": "Min",
+  "max": "Max",
+  "apply": "Appliquer",
+  "searchHint": "Rechercher...",
+  "noAnnoncesFound": "Aucune annonce trouvée",
+  "newAnnonce": "Nouvelle annonce",
+  "photosCount": "Photos ({count}/5)",
+  "@photosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mainCategory": "Catégorie principale",
+  "condition": "État",
+  "newCondition": "Neuf",
+  "usedCondition": "Occasion",
+  "title": "Titre",
+  "priceDa": "Prix (DA)",
+  "invalidPrice": "Prix invalide",
+  "exchangePossible": "Échange possible",
+  "exchangeSubtitle": "L'article peut être échangé contre un autre",
+  "phone": "Téléphone",
+  "gallery": "Galerie",
+  "photo": "Photo",
+  "showPhone": "Afficher mon numéro",
+  "showPhoneSubtitle": "Si désactivé, les utilisateurs ne pourront pas vous appeler directement",
+  "wilaya": "Wilaya",
+  "commune": "Commune",
+  "publishAnnonce": "Publier l'annonce",
+  "compressingAndSending": "Compression & Envoi...",
+  "maxFivePhotos": "Maximum 5 photos autorisées",
+  "addAtLeastOnePhoto": "Veuillez ajouter au moins une photo",
+  "selectCategoryValidation": "Veuillez sélectionner une catégorie",
+  "selectSubCategoryValidation": "Veuillez sélectionner une sous-catégorie",
+  "enterTitle": "Veuillez entrer un titre",
+  "titleMinLength": "Le titre doit contenir au moins 5 caractères",
+  "enterDescription": "Veuillez entrer une description",
+  "descriptionMinLength": "La description doit contenir au moins 20 caractères",
+  "enterPrice": "Veuillez entrer un prix",
+  "enterPhone": "Veuillez entrer un numéro de téléphone",
+  "annonceCreatedPending": "Annonce créée ! En attente de validation.",
+  "creationError": "Erreur lors de la création",
+  "imageCompressionError": "Erreur lors de la compression des images: {error}",
+  "@imageCompressionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "verificationRequired": "Vérification requise",
+  "phoneVerificationRequiredMessage": "Vous devez vérifier votre numéro de téléphone avant de publier une annonce.",
+  "verify": "Vérifier",
+  "errorWithMessage": "Erreur: {error}",
+  "@errorWithMessage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}

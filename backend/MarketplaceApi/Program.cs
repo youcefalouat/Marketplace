@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MarketplaceApi.Data;
@@ -9,10 +10,23 @@ using MarketplaceApi.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+    options.Limits.MaxRequestBodySize = 50 * 1024 * 1024;
+});
+
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(45);
+    options.MaximumReceiveMessageSize = 32 * 1024;
+});
 
 // Add Blazor Server for Admin
 builder.Services.AddRazorPages();
@@ -89,6 +103,21 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 })
 .AddPolicyScheme("JWT_OR_COOKIE", "JWT_OR_COOKIE", options =>
 {
@@ -105,6 +134,8 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 // Register services
+builder.Services.AddSingleton<MarketplaceApi.Services.ChatConnectionManager>();
+builder.Services.AddScoped<MarketplaceApi.Services.INotificationService, MarketplaceApi.Services.NotificationService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
@@ -112,6 +143,16 @@ builder.Services.Configure<FeaturedFeedOptions>(builder.Configuration.GetSection
 builder.Services.Configure<ImageProcessingOptions>(builder.Configuration.GetSection("ImageProcessing"));
 builder.Services.AddScoped<IAnnonceFeedService, AnnonceFeedService>();
 builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
+
+// Configure Firebase
+try
+{
+    FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions());
+}
+catch (Exception)
+{
+    // Ignore if already initialized or missing credentials
+}
 
 // Configure Twilio
 builder.Services.Configure<MarketplaceApi.Models.TwilioSettings>(builder.Configuration.GetSection("Twilio"));
@@ -129,6 +170,18 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+var webRootPath = app.Environment.WebRootPath;
+if (string.IsNullOrWhiteSpace(webRootPath))
+{
+    webRootPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+    app.Environment.WebRootPath = webRootPath;
+}
+
+Directory.CreateDirectory(webRootPath);
+Directory.CreateDirectory(Path.Combine(webRootPath, "images"));
+Directory.CreateDirectory(Path.Combine(webRootPath, "uploads"));
+app.Environment.WebRootFileProvider = new PhysicalFileProvider(webRootPath);
 
 // Configure the HTTP request pipeline
 // Force en-US culture for consistent number parsing (decimal points)
@@ -208,4 +261,3 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
-

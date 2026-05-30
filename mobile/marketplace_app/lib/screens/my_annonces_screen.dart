@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/api_service.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
+import '../theme/app_colors.dart';
+import '../l10n/category_localizations.dart';
 import 'annonce_detail_screen.dart';
 import 'moderation_thread_screen.dart';
 
@@ -61,53 +63,90 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
   }
 
   Future<void> _deleteAnnonce(MyAnnonce annonce) async {
-    final confirmed = await showDialog<bool>(
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final selectedStatus = await showDialog<AnnonceDeletionStatus>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer l\'annonce'),
-        content: Text('Voulez-vous vraiment supprimer "${annonce.title}" ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+      builder: (context) {
+        AnnonceDeletionStatus? draftStatus;
+
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Retirer l\'annonce'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Pourquoi voulez-vous retirer "${annonce.title}" ?'),
+                const SizedBox(height: AppLayout.spacing16),
+                RadioGroup<AnnonceDeletionStatus>(
+                  groupValue: draftStatus,
+                  onChanged: (value) => setState(() => draftStatus = value),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final option in AnnonceDeletionStatus.values)
+                        RadioListTile<AnnonceDeletionStatus>(
+                          value: option,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(option.label),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: draftStatus == null
+                    ? null
+                    : () => Navigator.pop(context, draftStatus),
+                child: const Text('Confirmer'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
-    if (confirmed == true && mounted) {
+    if (selectedStatus != null && mounted) {
       final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-      final success = await provider.deleteAnnonce(annonce.id);
+      final success = await provider.deleteAnnonce(annonce.id, selectedStatus);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                success ? 'Annonce supprimée' : provider.error ?? 'Erreur'),
-            backgroundColor: success ? Colors.green : Colors.red,
+            content: Text(success
+                ? selectedStatus.successMessage
+                : provider.error ?? 'Erreur'),
+            backgroundColor: success ? colors.accent : colors.error,
           ),
         );
       }
     }
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String status, AppColors colors) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return Colors.orange;
+        return colors.warning;
       case 'underreview':
-        return Colors.blue;
+        return colors.primary;
       case 'approved':
-        return Colors.green;
+        return colors.accent;
       case 'rejected':
-        return Colors.red;
+        return colors.error;
+      case 'sold':
+        return colors.accent;
+      case 'archived':
+        return colors.textTertiary;
+      case 'deleted':
+        return colors.textTertiary;
       default:
-        return Colors.grey;
+        return colors.textTertiary;
     }
   }
 
@@ -121,6 +160,12 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
         return 'Approuvée';
       case 'rejected':
         return 'Refusée';
+      case 'sold':
+        return 'Vendue';
+      case 'archived':
+        return 'Archivee';
+      case 'deleted':
+        return 'Supprimee';
       default:
         return status;
     }
@@ -136,6 +181,12 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
         return Icons.check_circle;
       case 'rejected':
         return Icons.cancel;
+      case 'sold':
+        return Icons.sell;
+      case 'archived':
+        return Icons.archive_outlined;
+      case 'deleted':
+        return Icons.delete_outline;
       default:
         return Icons.help;
     }
@@ -149,6 +200,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
       ),
       body: Consumer<AnnoncesProvider>(
         builder: (context, provider, child) {
+          final colors = Theme.of(context).extension<AppColors>()!;
           if (provider.isLoading && provider.myAnnonces.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -158,10 +210,12 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text(provider.error!),
-                  const SizedBox(height: 16),
+                  Icon(Icons.error_outline,
+                      size: 64, color: colors.textTertiary),
+                  const SizedBox(height: AppLayout.spacing16),
+                  Text(provider.error!,
+                      style: TextStyle(color: colors.textSecondary)),
+                  const SizedBox(height: AppLayout.spacing16),
                   ElevatedButton(
                     onPressed: _loadMyAnnonces,
                     child: const Text('Réessayer'),
@@ -177,11 +231,11 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.list_alt_outlined,
-                      size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
+                      size: 64, color: colors.textTertiary),
+                  const SizedBox(height: AppLayout.spacing16),
                   Text(
                     'Vous n\'avez pas encore d\'annonces',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(color: colors.textSecondary),
                   ),
                 ],
               ),
@@ -191,7 +245,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
           return RefreshIndicator(
             onRefresh: () async => _loadMyAnnonces(),
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppLayout.screenPadding),
               itemCount: provider.myAnnonces.length,
               itemBuilder: (context, index) {
                 return _buildAnnonceCard(provider.myAnnonces[index]);
@@ -204,16 +258,17 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
   }
 
   Widget _buildAnnonceCard(MyAnnonce annonce) {
-    final statusColor = _getStatusColor(annonce.status);
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final statusColor = _getStatusColor(annonce.status, colors);
     final isGoodDeal = annonce.isGoodDeal;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppLayout.spacing12),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppLayout.borderRadiusMedium,
         side: isGoodDeal
-            ? BorderSide(color: Colors.green.shade400, width: 1.2)
-            : BorderSide.none,
+            ? BorderSide(color: colors.accent, width: 1.2)
+            : BorderSide(color: colors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -242,24 +297,30 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  (annonce.mainThumbnailUrl != null || annonce.mainImageUrl != null)
+                  (annonce.mainThumbnailUrl != null ||
+                          annonce.mainImageUrl != null)
                       ? CachedNetworkImage(
                           imageUrl: ApiService.getImageUrl(
-                              annonce.mainThumbnailUrl ?? annonce.mainImageUrl!)!,
+                              annonce.mainThumbnailUrl ??
+                                  annonce.mainImageUrl!)!,
                           fit: BoxFit.cover,
+                          httpHeaders: const {
+                            'ngrok-skip-browser-warning': 'true'
+                          },
                           placeholder: (context, url) => Container(
-                            color: Colors.grey[200],
+                            color: colors.imagePlaceholder,
                             child: const Center(
                                 child: CircularProgressIndicator()),
                           ),
                           errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[200],
-                            child: const Icon(Icons.image_not_supported),
+                            color: colors.imagePlaceholder,
+                            child: Icon(Icons.image_not_supported,
+                                color: colors.textTertiary),
                           ),
                         )
                       : Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.image, color: Colors.grey),
+                          color: colors.imagePlaceholder,
+                          child: Icon(Icons.image, color: colors.textTertiary),
                         ),
                   if (isGoodDeal)
                     Positioned(
@@ -269,13 +330,14 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade600.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(999),
+                          color: colors.accent,
+                          borderRadius:
+                              BorderRadius.circular(AppLayout.radiusFull),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Bonne affaire',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: colors.textOnPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 10,
                           ),
@@ -289,7 +351,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
             // Info
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppLayout.cardPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -297,30 +359,43 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                       annonce.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
+                        color: colors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppLayout.spacing4),
                     Text(
                       '${annonce.price.toStringAsFixed(0)} DA',
                       style: TextStyle(
-                        color: isGoodDeal
-                            ? Colors.green.shade700
-                            : Theme.of(context).primaryColor,
+                        color: isGoodDeal ? colors.accent : colors.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppLayout.spacing4),
+                    Text(
+                      localizedCategoryText(
+                        context,
+                        annonce.category,
+                        arName: annonce.categoryArName,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: AppLayout.spacing8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: AppLayout.borderRadiusMedium,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -330,7 +405,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                             size: 14,
                             color: statusColor,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppLayout.spacing4),
                           Text(
                             _getStatusLabel(annonce.status),
                             style: TextStyle(
@@ -350,7 +425,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
             // Delete button
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              color: Colors.red,
+              color: colors.error,
               onPressed: () => _deleteAnnonce(annonce),
             ),
           ],

@@ -8,6 +8,8 @@ public class CreateAnnonceDto
 {
     [Required]
     public int CategoryId { get; set; }
+
+    public int? ParentCategoryId { get; set; }
     
     [Required]
     [MaxLength(200)]
@@ -36,6 +38,12 @@ public class CreateAnnonceDto
     public bool ShowPhone { get; set; } = true;
 }
 
+public class DeleteAnnonceDto
+{
+    [Required]
+    public AnnonceStatus Status { get; set; }
+}
+
 // Response DTOs
 public class AnnonceListDto
 {
@@ -44,7 +52,10 @@ public class AnnonceListDto
     public decimal Price { get; set; }
     public string WilayaName { get; set; } = string.Empty;
     public string CommuneName { get; set; } = string.Empty;
+    public int CategoryId { get; set; }
     public string Category { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public string CategoryArName { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
     public string? MainThumbnailUrl { get; set; }
     public bool IsExchange { get; set; }
@@ -60,7 +71,10 @@ public class AnnonceDetailDto
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public int CategoryId { get; set; }
     public string Category { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public string CategoryArName { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public bool ShowPhone { get; set; }
@@ -99,7 +113,10 @@ public class MyAnnonceDto
     public int Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public int CategoryId { get; set; }
     public string Category { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public string CategoryArName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
     public string? MainThumbnailUrl { get; set; }
@@ -114,7 +131,10 @@ public class AdminAnnonceListDto
     public int Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public int CategoryId { get; set; }
     public string Category { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public string CategoryArName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string SellerName { get; set; } = string.Empty;
     public string SellerPhone { get; set; } = string.Empty;

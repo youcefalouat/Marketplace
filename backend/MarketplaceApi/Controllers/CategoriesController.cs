@@ -24,13 +24,27 @@ public class CategoriesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<CategoryDto>>> GetCategories()
     {
-        var allCategories = await _context.Categories.ToListAsync();
+        return Ok(await BuildCategoryHierarchyAsync());
+    }
+
+    /// <summary>
+    /// Get all categories as a hierarchical tree with children nodes
+    /// </summary>
+    [HttpGet("hierarchy")]
+    public async Task<ActionResult<List<CategoryDto>>> GetCategoryHierarchy()
+    {
+        return Ok(await BuildCategoryHierarchyAsync());
+    }
+
+    private async Task<List<CategoryDto>> BuildCategoryHierarchyAsync()
+    {
+        var allCategories = await _context.Categories
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
+            .ToListAsync();
         
-        // Build tree
         var rootCategories = allCategories.Where(c => c.ParentId == null).ToList();
-        var categoryDtos = rootCategories.Select(c => MapToDto(c, allCategories)).ToList();
-        
-        return Ok(categoryDtos);
+        return rootCategories.Select(c => MapToDto(c, allCategories)).ToList();
     }
 
     /// <summary>
@@ -74,6 +88,7 @@ public class CategoriesController : ControllerBase
         var category = new Category
         {
             Name = dto.Name,
+            ArName = dto.ArName,
             Slug = dto.Slug,
             ParentId = dto.ParentId,
             CreatedAt = DateTime.UtcNow,
@@ -122,6 +137,7 @@ public class CategoriesController : ControllerBase
         }
 
         category.Name = dto.Name;
+        category.ArName = dto.ArName;
         category.Slug = dto.Slug;
         category.ParentId = dto.ParentId;
         category.UpdatedAt = DateTime.UtcNow;
@@ -170,10 +186,12 @@ public class CategoriesController : ControllerBase
         {
             Id = category.Id,
             Name = category.Name,
+            ArName = category.ArName,
             Slug = category.Slug,
             ParentId = category.ParentId,
-            SubCategories = allCategories
+            Children = allCategories
                 .Where(c => c.ParentId == category.Id)
+                .OrderBy(c => c.Name)
                 .Select(c => MapToDto(c, allCategories))
                 .ToList()
         };

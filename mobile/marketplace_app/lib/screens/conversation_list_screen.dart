@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/chat_provider.dart';
-import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 import 'chat_screen.dart';
-import '../models/models.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/category_localizations.dart';
 
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({super.key});
@@ -18,15 +20,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   @override
   void initState() {
     super.initState();
-    // Load conversations when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-
-      if (authProvider.token != null) {
-        chatProvider.connect(authProvider.token!);
-        chatProvider.loadConversations();
-      }
+      chatProvider.loadConversations();
     });
   }
 
@@ -34,7 +30,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: Text(AppLocalizations.of(context)!.messages), //Text('messages'),
       ),
       body: _buildChatsTab(),
     );
@@ -74,10 +70,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             itemCount: chatProvider.conversations.length,
             itemBuilder: (context, index) {
               final conversation = chatProvider.conversations[index];
+              final colors = Theme.of(context).extension<AppColors>()!;
               return ListTile(
                 leading: CircleAvatar(
                   backgroundImage: conversation.annonceImage.isNotEmpty
-                      ? NetworkImage(
+                      ? CachedNetworkImageProvider(
                           ApiService.getImageUrl(conversation.annonceImage)!)
                       : null,
                   child: conversation.annonceImage.isEmpty
@@ -92,30 +89,66 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         : FontWeight.normal,
                   ),
                 ),
-                subtitle: Row(
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        conversation.lastMessageContent.isNotEmpty
-                            ? conversation.lastMessageContent
-                            : 'Démarrer la conversation',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: conversation.hasUnreadMessages
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        AppLocalizations.of(context)!.price(
+                          conversation.annoncePrice.toStringAsFixed(0),
                         ),
+                        localizedCategoryText(
+                          context,
+                          conversation.annonceCategoryName,
+                          arName: conversation.annonceCategoryArName,
+                        ),
+                      ].where((value) => value.isNotEmpty).join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.textTertiary,
+                        fontSize: 12,
                       ),
                     ),
-                    Text(
-                      DateFormat('dd/MM HH:mm')
-                          .format(conversation.lastMessageAt.toLocal()),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            conversation.lastMessageContent.isNotEmpty
+                                ? conversation.lastMessageContent
+                                : AppLocalizations.of(context)!
+                                    .startConversation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: conversation.hasUnreadMessages
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          DateFormat('dd/MM HH:mm')
+                              .format(conversation.lastMessageAt.toLocal()),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.textTertiary,
+                          ),
+                        ),
+                        if (conversation.unreadCount > 0) ...[
+                          const SizedBox(width: 8),
+                          _UnreadBadge(count: conversation.unreadCount),
+                        ],
+                      ],
                     ),
                   ],
                 ),
                 onTap: () {
+                  if (conversation.unreadCount > 0) {
+                    chatProvider.markConversationRead(conversation.id);
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -124,6 +157,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         interlocutorName: conversation.interlocutorName,
                         annonceId: conversation.annonceId,
                         annonceTitle: conversation.annonceTitle,
+                        annonceImage: conversation.annonceImage,
+                        annoncePrice: conversation.annoncePrice,
+                        annonceCategoryName: conversation.annonceCategoryName,
+                        annonceCategoryArName:
+                            conversation.annonceCategoryArName,
+                        annonceStatus: conversation.annonceStatus,
                       ),
                     ),
                   ).then((_) {
@@ -135,6 +174,36 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  final int count;
+
+  const _UnreadBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final label = count > 99 ? '99+' : count.toString();
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.textOnPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
