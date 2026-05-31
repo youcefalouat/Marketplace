@@ -95,6 +95,9 @@ namespace MarketplaceApi.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("ReservationEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("ShowPhone")
                         .HasColumnType("bit");
 
@@ -272,19 +275,13 @@ namespace MarketplaceApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AnnonceId");
-
-                    b.HasIndex("AnnonceId", "BuyerId", "SellerId", "IsModeration");
-
-                    b.HasIndex("BuyerId");
+                    b.HasIndex("LastMessageAt");
 
                     b.HasIndex("BuyerId", "LastMessageAt");
 
-                    b.HasIndex("LastMessageAt");
-
-                    b.HasIndex("SellerId");
-
                     b.HasIndex("SellerId", "LastMessageAt");
+
+                    b.HasIndex("AnnonceId", "BuyerId", "SellerId", "IsModeration");
 
                     b.ToTable("Conversations");
                 });
@@ -321,13 +318,11 @@ namespace MarketplaceApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ConversationId");
+                    b.HasIndex("SenderId");
 
                     b.HasIndex("ConversationId", "SentAt");
 
                     b.HasIndex("ReceiverId", "IsRead");
-
-                    b.HasIndex("SenderId");
 
                     b.ToTable("Messages");
                 });
@@ -399,6 +394,45 @@ namespace MarketplaceApi.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("ModerationThreads");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.Reservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AnnonceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RendezVousDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ReservationDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnnonceId", "Rank");
+
+                    b.HasIndex("UserId", "AnnonceId")
+                        .IsUnique();
+
+                    b.ToTable("Reservations");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.User", b =>
@@ -673,15 +707,15 @@ namespace MarketplaceApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MarketplaceApi.Models.User", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("MarketplaceApi.Models.User", "Receiver")
                         .WithMany()
                         .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -730,6 +764,25 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.Reservation", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.Annonce", "Annonce")
+                        .WithMany("Reservations")
+                        .HasForeignKey("AnnonceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Annonce");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.User", b =>
                 {
                     b.HasOne("MarketplaceApi.Models.Commune", "Commune")
@@ -773,6 +826,8 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("AdminNotes");
 
                     b.Navigation("Images");
+
+                    b.Navigation("Reservations");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.Category", b =>

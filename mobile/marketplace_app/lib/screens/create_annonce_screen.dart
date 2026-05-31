@@ -34,6 +34,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   int _selectedState = 0;
   bool _isExchange = false;
   bool _showPhone = true;
+  bool _reservationEnabled = false;
   final List<File> _images = [];
   final ImagePicker _picker = ImagePicker();
 
@@ -297,6 +298,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
       communeId: _selectedCommune?.id,
       isExchange: _isExchange,
       showPhone: _showPhone,
+      reservationEnabled: _reservationEnabled,
       images: finalImages,
     );
 
@@ -467,12 +469,35 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             ),
             const SizedBox(height: 16),
 
+            // Reservation mode toggle
+            SwitchListTile(
+              title: const Text('Mode réservation'),
+              subtitle: const Text(
+                  'Les acheteurs pourront réserver cette annonce'),
+              value: _reservationEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _reservationEnabled = value;
+                  if (value) {
+                    _isExchange = false;
+                    _showPhone = false;
+                  }
+                });
+              },
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            const SizedBox(height: 8),
+
             // IsExchange toggle
             SwitchListTile(
               title: Text(l10n.exchangePossible),
-              subtitle: Text(l10n.exchangeSubtitle),
+              subtitle: Text(_reservationEnabled
+                  ? 'Désactivé en mode réservation'
+                  : l10n.exchangeSubtitle),
               value: _isExchange,
-              onChanged: (value) => setState(() => _isExchange = value),
+              onChanged: _reservationEnabled
+                  ? null
+                  : (value) => setState(() => _isExchange = value),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             ),
             const SizedBox(height: 16),
@@ -500,9 +525,13 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             // Show Phone toggle
             SwitchListTile(
               title: Text(l10n.showPhone),
-              subtitle: Text(l10n.showPhoneSubtitle),
+              subtitle: Text(_reservationEnabled
+                  ? 'Désactivé en mode réservation'
+                  : l10n.showPhoneSubtitle),
               value: _showPhone,
-              onChanged: (value) => setState(() => _showPhone = value),
+              onChanged: _reservationEnabled
+                  ? null
+                  : (value) => setState(() => _showPhone = value),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             ),
             const SizedBox(height: 16),

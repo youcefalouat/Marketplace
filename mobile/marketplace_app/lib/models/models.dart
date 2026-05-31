@@ -375,6 +375,7 @@ class AnnonceDetail {
   final bool showPhone;
   final String status;
   final bool isGoodDeal;
+  final bool reservationEnabled;
   final DateTime createdAt;
   final List<ImageUrlDto> imageUrls;
   final SellerInfo seller;
@@ -397,6 +398,7 @@ class AnnonceDetail {
     required this.showPhone,
     required this.status,
     required this.isGoodDeal,
+    this.reservationEnabled = false,
     required this.createdAt,
     required this.imageUrls,
     required this.seller,
@@ -423,6 +425,7 @@ class AnnonceDetail {
       showPhone: json['showPhone'] as bool? ?? true,
       status: json['status'] as String,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
+      reservationEnabled: json['reservationEnabled'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
       imageUrls: (json['imageUrls'] as List<dynamic>)
           .map((e) => ImageUrlDto.fromJson(e as Map<String, dynamic>))
@@ -865,6 +868,20 @@ class ModerationMessage {
       sentAt: DateTime.parse(json['sentAt'] as String),
       isFromAdmin: json['isFromAdmin'] as bool? ?? false,
       isMe: json['isMe'] as bool? ?? false,
+    );
+  }
+}
+
+class ReservationCreatedResult {
+  final int rank;
+  final String message;
+
+  ReservationCreatedResult({required this.rank, required this.message});
+
+  factory ReservationCreatedResult.fromJson(Map<String, dynamic> json) {
+    return ReservationCreatedResult(
+      rank: json['rank'] as int,
+      message: json['message'] as String? ?? '',
     );
   }
 }

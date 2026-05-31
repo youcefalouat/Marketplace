@@ -284,8 +284,9 @@ public class AnnoncesController : ControllerBase
             Phone = dto.Phone ?? user.Phone,
             WilayaId = wilayaId,
             CommuneId = communeId,
-            IsExchange = dto.IsExchange,
-            ShowPhone = dto.ShowPhone,
+            ReservationEnabled = dto.ReservationEnabled,
+            IsExchange = dto.ReservationEnabled ? false : dto.IsExchange,
+            ShowPhone = dto.ReservationEnabled ? false : dto.ShowPhone,
             Status = AnnonceStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -470,6 +471,7 @@ public class AnnoncesController : ControllerBase
             IsExchange = annonce.IsExchange,
             Status = annonce.Status.ToString(),
             IsGoodDeal = annonce.IsGoodDeal,
+            ReservationEnabled = annonce.ReservationEnabled,
             CreatedAt = annonce.CreatedAt,
             ImageUrls = annonce.Images.OrderBy(i => i.DisplayOrder).Select(i => new ImageUrlDto
             {

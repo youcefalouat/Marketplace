@@ -163,6 +163,7 @@ class AnnoncesProvider with ChangeNotifier {
     int? communeId,
     bool isExchange = false,
     bool showPhone = true,
+    bool reservationEnabled = false,
     required List<File> images,
   }) async {
     _isLoading = true;
@@ -182,6 +183,7 @@ class AnnoncesProvider with ChangeNotifier {
         communeId: communeId,
         isExchange: isExchange,
         showPhone: showPhone,
+        reservationEnabled: reservationEnabled,
         images: images,
       );
       _isLoading = false;

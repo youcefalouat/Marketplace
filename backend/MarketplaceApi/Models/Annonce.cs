@@ -56,7 +56,9 @@ public class Annonce
     public decimal? StorePriceEstimate { get; set; }
     
     public bool IsGoodDeal { get; set; } = false;
-    
+
+    public bool ReservationEnabled { get; set; } = false;
+
     // Navigation properties
     public User User { get; set; } = null!;
     public Wilaya Wilaya { get; set; } = null!;
@@ -64,4 +66,5 @@ public class Annonce
     public Category Category { get; set; } = null!;
     public ICollection<AnnonceImage> Images { get; set; } = new List<AnnonceImage>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
+    public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
 }

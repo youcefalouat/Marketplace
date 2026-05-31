@@ -715,6 +715,7 @@ class ApiService {
     int? communeId,
     bool isExchange = false,
     bool showPhone = true,
+    bool reservationEnabled = false,
     required List<File> images,
   }) async {
     final token = await getToken();
@@ -738,6 +739,7 @@ class ApiService {
       request.fields['state'] = state.toString();
       request.fields['isExchange'] = isExchange.toString();
       request.fields['showPhone'] = showPhone.toString();
+      request.fields['reservationEnabled'] = reservationEnabled.toString();
       if (phone != null) request.fields['phone'] = phone;
       if (wilayaId != null) request.fields['wilayaId'] = wilayaId.toString();
       if (communeId != null) request.fields['communeId'] = communeId.toString();
@@ -829,6 +831,25 @@ class ApiService {
       throw Exception(
           _extractErrorMessage(response, 'Erreur lors de l\'envoi de la note'));
     }
+  }
+
+  // ─── Reservation endpoints ───
+
+  Future<ReservationCreatedResult> createReservation(int annonceId) async {
+    final headers = await _authHeaders();
+    final response = await _post(
+      Uri.parse('$baseUrl/reservations'),
+      headers: headers,
+      body: jsonEncode({'annonceId': annonceId}),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return ReservationCreatedResult.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
+    }
+
+    throw Exception(
+        _extractErrorMessage(response, 'Erreur lors de la réservation'));
   }
 
   // ─── Admin/Seller chat on annonce endpoints ───

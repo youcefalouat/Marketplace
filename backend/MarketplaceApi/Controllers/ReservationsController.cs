@@ -1,0 +1,125 @@
+using System.Security.Claims;
+using MarketplaceApi.Data;
+using MarketplaceApi.DTOs;
+using MarketplaceApi.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace MarketplaceApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ReservationsController : ControllerBase
+{
+    private readonly ApplicationDbContext _context;
+    private readonly IReservationService _reservationService;
+
+    public ReservationsController(ApplicationDbContext context, IReservationService reservationService)
+    {
+        _context = context;
+        _reservationService = reservationService;
+    }
+
+    // POST /api/reservations
+    [HttpPost]
+    [Authorize]
+    public async Task<ActionResult<CreateReservationResponseDto>> CreateReservation(
+        [FromBody] CreateReservationDto dto)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId.Value);
+        if (user == null) return Unauthorized();
+
+        if (!user.PhoneVerified)
+            return StatusCode(403, new
+            {
+                message = "Veuillez vérifier votre numéro de téléphone avant de réserver",
+                requiresPhoneVerification = true
+            });
+
+        try
+        {
+            var result = await _reservationService.CreateReservationAsync(userId.Value, dto.AnnonceId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // GET /api/annonces/{annonceId}/reservations
+    [HttpGet("/api/annonces/{annonceId:int}/reservations")]
+    [Authorize]
+    public async Task<ActionResult<List<ReservationDto>>> GetReservations(int annonceId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var annonce = await _context.Annonces.FindAsync(annonceId);
+        if (annonce == null) return NotFound(new { message = "Annonce introuvable" });
+
+        var isAdmin = User.IsInRole("Admin");
+        if (annonce.UserId != userId.Value && !isAdmin)
+            return Forbid();
+
+        var reservations = await _reservationService.GetReservationsByAnnonceAsync(annonceId);
+        return Ok(reservations);
+    }
+
+    // DELETE /api/reservations/{id}
+    [HttpDelete("{id:int}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteReservation(int id)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var reservation = await _context.Reservations
+            .Include(r => r.Annonce)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (reservation == null) return NotFound(new { message = "Réservation introuvable" });
+
+        var isAdmin = User.IsInRole("Admin");
+        if (reservation.Annonce.UserId != userId.Value && !isAdmin)
+            return Forbid();
+
+        try
+        {
+            await _reservationService.DeleteReservationAsync(id);
+            return Ok(new { message = "Réservation supprimée avec succès" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // PUT /api/reservations/{id}/rendez-vous
+    [HttpPut("{id:int}/rendez-vous")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateRendezVous(int id, [FromBody] UpdateRendezVousDto dto)
+    {
+        try
+        {
+            await _reservationService.UpdateRendezVousAsync(id, dto.RendezVousDateTime);
+            return Ok(new { message = "Rendez-vous mis à jour avec succès" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return null;
+        return userId;
+    }
+}

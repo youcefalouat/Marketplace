@@ -12,6 +12,7 @@ import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/reservation_provider.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_colors.dart';
 
@@ -44,6 +45,7 @@ class MarketplaceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => AnnoncesProvider()),
+        ChangeNotifierProvider(create: (_) => ReservationProvider()),
         ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
           create: (_) => ChatProvider(),
           update: (_, authProvider, chatProvider) {

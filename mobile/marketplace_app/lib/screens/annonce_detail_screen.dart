@@ -13,6 +13,8 @@ import 'login_screen.dart';
 import '../widgets/star_rating.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/category_localizations.dart';
+import '../providers/reservation_provider.dart';
+import 'phone_verification_screen.dart';
 
 class AnnonceDetailScreen extends StatefulWidget {
   final int annonceId;
@@ -227,6 +229,111 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     );
   }
 
+  Future<void> _showReservationDialog(AnnonceDetail annonce) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text(AppLocalizations.of(context)!.mustBeLoggedInToMessage)),
+      );
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
+
+    if (authProvider.user?.phoneVerified != true) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Vérification requise'),
+          content: const Text(
+              'Veuillez vérifier votre numéro de téléphone avant de réserver.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const PhoneVerificationScreen()));
+              },
+              child: const Text('Vérifier'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    bool isSubmitting = false;
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: const Text('Confirmer votre réservation'),
+              content: const Text(
+                  'Voulez-vous confirmer votre réservation pour cette annonce ?'),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Annuler'),
+                ),
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          try {
+                            final reservationProvider =
+                                Provider.of<ReservationProvider>(context,
+                                    listen: false);
+                            final result = await reservationProvider
+                                .createReservation(annonce.id);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (result != null && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Réservation enregistrée avec succès ! Votre rang est : #${result.rank}'),
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(
+                                    content: Text(e
+                                        .toString()
+                                        .replaceAll('Exception: ', ''))),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Confirmer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   String _getStateLabel(String state) {
     switch (state.toLowerCase()) {
       case 'new':
@@ -257,6 +364,32 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
   Widget? _buildBottomBar(BuildContext context, AnnonceDetail? annonce) {
     if (annonce == null) return null;
     final colors = Theme.of(context).extension<AppColors>()!;
+
+    if (annonce.reservationEnabled) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.user?.id == annonce.seller.id) return null;
+
+      return Container(
+        padding: const EdgeInsets.all(AppLayout.screenPadding),
+        decoration: BoxDecoration(
+          color: colors.surfaceElevated1,
+          border: Border(top: BorderSide(color: colors.border)),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showReservationDialog(annonce),
+              icon: const Icon(Icons.bookmark_add),
+              label: const Text('Réserver'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     final hasPhone = annonce.showPhone && annonce.phone.isNotEmpty;
 

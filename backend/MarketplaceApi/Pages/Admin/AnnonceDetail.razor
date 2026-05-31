@@ -85,6 +85,66 @@ else
                     <p class="text-muted">@_annonce.Description</p>
                 </div>
             </div>
+            <!-- Reservations -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Réservations</h5>
+                    <span class="badge bg-primary">@_reservations.Count</span>
+                </div>
+                <div class="card-body">
+                    @if (!_reservations.Any())
+                    {
+                        <p class="text-muted mb-0">Aucune réservation pour cette annonce.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Rang</th>
+                                        <th>Nom</th>
+                                        <th>Téléphone</th>
+                                        <th>Date réservation</th>
+                                        <th>Rendez-vous</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var res in _reservations)
+                                    {
+                                        <tr>
+                                            <td><span class="badge bg-secondary">#@res.Rank</span></td>
+                                            <td>@res.User.Name</td>
+                                            <td>@res.User.Phone</td>
+                                            <td>@res.ReservationDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>
+                                                <input type="datetime-local"
+                                                       class="form-control form-control-sm"
+                                                       style="min-width: 180px;"
+                                                       value="@(_editingRendezVous.GetValueOrDefault(res.Id, string.Empty))"
+                                                       @oninput="e => _editingRendezVous[res.Id] = e.Value?.ToString() ?? string.Empty" />
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1"
+                                                        @onclick="() => SaveRendezVous(res.Id)"
+                                                        title="Enregistrer rendez-vous">
+                                                    <i class="bi bi-save"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => ConfirmDeleteReservation(res.Id)"
+                                                        title="Supprimer réservation">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
         </div>
 
         <!-- Right Column - Actions & Notes -->
@@ -229,6 +289,26 @@ else
     </div>
 }
 
+@if (_showDeleteConfirmModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmer la suppression</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Voulez-vous supprimer cette réservation ? Les rangs seront réordonnés automatiquement.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showDeleteConfirmModal = false">Annuler</button>
+                    <button class="btn btn-danger" @onclick="DeleteReservationConfirmed">Supprimer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public int Id { get; set; }
@@ -240,6 +320,10 @@ else
     private Conversation? _moderationThread;
     private List<Message> _moderationMessages = new();
     private string _moderationDraft = "";
+    private List<Reservation> _reservations = new();
+    private Dictionary<int, string> _editingRendezVous = new();
+    private bool _showDeleteConfirmModal = false;
+    private int _reservationToDeleteId = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,6 +350,16 @@ else
             _storeEstimate = _annonce.StorePriceEstimate;
             _isGoodDeal = _annonce.IsGoodDeal;
         }
+
+        _reservations = await DbContext.Reservations
+            .Include(r => r.User)
+            .Where(r => r.AnnonceId == Id)
+            .OrderBy(r => r.Rank)
+            .ToListAsync();
+
+        _editingRendezVous = _reservations.ToDictionary(
+            r => r.Id,
+            r => r.RendezVousDateTime?.ToString("yyyy-MM-ddTHH:mm") ?? string.Empty);
 
         _moderationThread = await DbContext.Conversations
             .FirstOrDefaultAsync(t => t.AnnonceId == Id && t.IsModeration);
@@ -499,6 +593,74 @@ else
             TotalUnread = conversations.Sum(c => c.Count),
             Conversations = conversations
         };
+    }
+
+    private async Task SaveRendezVous(int reservationId)
+    {
+        var reservation = await DbContext.Reservations.FindAsync(reservationId);
+        if (reservation == null) return;
+
+        if (_editingRendezVous.TryGetValue(reservationId, out var dateStr) && !string.IsNullOrEmpty(dateStr))
+        {
+            if (DateTime.TryParse(dateStr, out var dt))
+            {
+                reservation.RendezVousDateTime = dt.ToUniversalTime();
+                reservation.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else
+        {
+            reservation.RendezVousDateTime = null;
+            reservation.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await DbContext.SaveChangesAsync();
+        await LoadAnnonce();
+    }
+
+    private void ConfirmDeleteReservation(int id)
+    {
+        _reservationToDeleteId = id;
+        _showDeleteConfirmModal = true;
+    }
+
+    private async Task DeleteReservationConfirmed()
+    {
+        _showDeleteConfirmModal = false;
+        if (_reservationToDeleteId == 0) return;
+
+        var reservation = await DbContext.Reservations.FindAsync(_reservationToDeleteId);
+        if (reservation == null) return;
+
+        var deletedRank = reservation.Rank;
+        var annonceId = reservation.AnnonceId;
+
+        await using var transaction = await DbContext.Database.BeginTransactionAsync();
+        try
+        {
+            DbContext.Reservations.Remove(reservation);
+            await DbContext.SaveChangesAsync();
+
+            var toReorder = await DbContext.Reservations
+                .Where(r => r.AnnonceId == annonceId && r.Rank > deletedRank)
+                .ToListAsync();
+
+            foreach (var r in toReorder)
+            {
+                r.Rank--;
+                r.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await DbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+        }
+
+        _reservationToDeleteId = 0;
+        await LoadAnnonce();
     }
 
     private async Task SaveEstimate()

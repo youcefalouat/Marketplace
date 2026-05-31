@@ -22,7 +22,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserRating> UserRatings { get; set; }
     public DbSet<ModerationThread> ModerationThreads { get; set; }
     public DbSet<ModerationMessage> ModerationMessages { get; set; }
-    
+    public DbSet<Reservation> Reservations { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -212,6 +213,23 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(m => m.ThreadId);
             entity.HasIndex(m => m.SentAt);
+        });
+
+        // Reservation configuration
+        modelBuilder.Entity<Reservation>(entity =>
+        {
+            entity.HasIndex(r => new { r.UserId, r.AnnonceId }).IsUnique();
+            entity.HasIndex(r => new { r.AnnonceId, r.Rank });
+
+            entity.HasOne(r => r.Annonce)
+                .WithMany(a => a.Reservations)
+                .HasForeignKey(r => r.AnnonceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

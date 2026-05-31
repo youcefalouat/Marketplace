@@ -34,8 +34,10 @@ public class CreateAnnonceDto
     public int? CommuneId { get; set; }
     
     public bool IsExchange { get; set; } = false;
-    
+
     public bool ShowPhone { get; set; } = true;
+
+    public bool ReservationEnabled { get; set; } = false;
 }
 
 public class DeleteAnnonceDto
@@ -85,6 +87,7 @@ public class AnnonceDetailDto
     public bool IsExchange { get; set; }
     public string Status { get; set; } = string.Empty;
     public bool IsGoodDeal { get; set; }
+    public bool ReservationEnabled { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<ImageUrlDto> ImageUrls { get; set; } = new();
     public SellerInfoDto Seller { get; set; } = null!;

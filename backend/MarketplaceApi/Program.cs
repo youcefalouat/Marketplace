@@ -139,6 +139,7 @@ builder.Services.AddScoped<MarketplaceApi.Services.INotificationService, Marketp
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
+builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.Configure<FeaturedFeedOptions>(builder.Configuration.GetSection("FeaturedFeed"));
 builder.Services.Configure<ImageProcessingOptions>(builder.Configuration.GetSection("ImageProcessing"));
 builder.Services.AddScoped<IAnnonceFeedService, AnnonceFeedService>();

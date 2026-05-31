@@ -66,4 +66,42 @@ public class NotificationService : INotificationService
             }
         }
     }
+
+    public async Task SendPushNotificationAsync(
+        int userId,
+        string title,
+        string body,
+        Dictionary<string, string>? data = null,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user == null || string.IsNullOrEmpty(user.FcmToken))
+            return;
+
+        var fcmMessage = new FirebaseAdmin.Messaging.Message
+        {
+            Token = user.FcmToken,
+            Notification = new Notification
+            {
+                Title = title,
+                Body = body
+            },
+            Data = data ?? new Dictionary<string, string>()
+        };
+
+        try
+        {
+            if (FirebaseAdmin.FirebaseApp.DefaultInstance != null)
+            {
+                await FirebaseMessaging.DefaultInstance.SendAsync(fcmMessage, cancellationToken);
+            }
+        }
+        catch (Exception)
+        {
+            // Silent catch for invalid tokens or disabled Firebase credentials
+        }
+    }
 }
