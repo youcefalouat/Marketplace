@@ -778,18 +778,65 @@ class ApiService {
     }
   }
 
-  Future<List<MyAnnonce>> getMyAnnonces() async {
+  Future<PaginatedResponse<MyAnnonce>> getMyAnnonces({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/annonces/my').replace(queryParameters: {
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    });
     final headers = await _authHeaders();
-    final response = await _get(
-      Uri.parse('$baseUrl/annonces/my'),
-      headers: headers,
-    );
+    final response = await _get(uri, headers: headers);
 
     if (response.statusCode == 200) {
-      final List<dynamic> json = jsonDecode(response.body);
-      return json.map((item) => MyAnnonce.fromJson(item)).toList();
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return PaginatedResponse.fromJson(json, MyAnnonce.fromJson);
     } else {
       throw Exception('Erreur lors de la récupération de vos annonces');
+    }
+  }
+
+  Future<PaginatedResponse<Conversation>> getAnnonceConversations(
+    int annonceId, {
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri =
+        Uri.parse('$baseUrl/chat/conversations').replace(queryParameters: {
+      'annonceId': annonceId.toString(),
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    });
+    final headers = await _authHeaders();
+    final response = await _get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return PaginatedResponse.fromJson(json, Conversation.fromJson);
+    } else {
+      throw Exception('Erreur lors de la récupération des conversations');
+    }
+  }
+
+  Future<PaginatedResponse<Reservation>> getAnnonceReservations(
+    int annonceId, {
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/annonces/$annonceId/reservations')
+        .replace(queryParameters: {
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    });
+    final headers = await _authHeaders();
+    final response = await _get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return PaginatedResponse.fromJson(json, Reservation.fromJson);
+    } else {
+      throw Exception('Erreur lors de la récupération des réservations');
     }
   }
 

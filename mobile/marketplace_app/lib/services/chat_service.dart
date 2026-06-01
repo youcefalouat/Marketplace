@@ -232,17 +232,26 @@ class ChatService {
     onConnectionStatusChanged?.call(status);
   }
 
-  Future<List<Conversation>> getConversations() async {
+  Future<PaginatedResponse<Conversation>> getConversations({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final path = Uri(
+      path: '/chat/conversations',
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    ).toString();
+
     final response = await _apiService.authenticatedRequest(
-      '/chat/conversations',
+      path,
       method: 'GET',
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data
-          .map((json) => Conversation.fromJson(json as Map<String, dynamic>))
-          .toList();
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return PaginatedResponse.fromJson(json, Conversation.fromJson);
     }
 
     throw Exception('Failed to load conversations: ${response.statusCode}');

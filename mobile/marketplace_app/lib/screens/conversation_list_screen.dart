@@ -17,28 +17,47 @@ class ConversationListScreen extends StatefulWidget {
 }
 
 class _ConversationListScreenState extends State<ConversationListScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-      chatProvider.loadConversations();
+      chatProvider.loadConversations(refresh: true);
     });
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      Provider.of<ChatProvider>(context, listen: false)
+          .loadMoreConversations();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.messages), //Text('messages'),
+        title: Text(AppLocalizations.of(context)!.messages),
       ),
-      body: _buildChatsTab(),
+      body: _buildBody(),
     );
   }
 
-  Widget _buildChatsTab() {
+  Widget _buildBody() {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
+        final colors = Theme.of(context).extension<AppColors>()!;
+
         if (chatProvider.isLoading && chatProvider.conversations.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -50,7 +69,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               children: [
                 Text('Erreur: ${chatProvider.error}'),
                 ElevatedButton(
-                  onPressed: chatProvider.loadConversations,
+                  onPressed: () =>
+                      chatProvider.loadConversations(refresh: true),
                   child: const Text('Réessayer'),
                 ),
               ],
@@ -59,18 +79,27 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         }
 
         if (chatProvider.conversations.isEmpty) {
-          return const Center(
-            child: Text('Aucune conversation'),
-          );
+          return const Center(child: Text('Aucune conversation'));
         }
 
+        final itemCount = chatProvider.conversations.length +
+            (chatProvider.hasMoreConversations ? 1 : 0);
+
         return RefreshIndicator(
-          onRefresh: chatProvider.loadConversations,
+          onRefresh: () =>
+              chatProvider.loadConversations(refresh: true),
           child: ListView.builder(
-            itemCount: chatProvider.conversations.length,
+            controller: _scrollController,
+            itemCount: itemCount,
             itemBuilder: (context, index) {
+              if (index >= chatProvider.conversations.length) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
               final conversation = chatProvider.conversations[index];
-              final colors = Theme.of(context).extension<AppColors>()!;
               return ListTile(
                 leading: CircleAvatar(
                   backgroundImage: conversation.annonceImage.isNotEmpty
@@ -83,6 +112,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
                 title: Text(
                   conversation.interlocutorName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: conversation.hasUnreadMessages
                         ? FontWeight.bold
@@ -166,7 +197,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                       ),
                     ),
                   ).then((_) {
-                    chatProvider.loadConversations();
+                    chatProvider.loadConversations(refresh: true);
                   });
                 },
               );

@@ -6,7 +6,6 @@ import '../models/models.dart';
 import '../theme/app_colors.dart';
 import 'annonce_detail_screen.dart';
 import '../services/api_service.dart';
-import '../widgets/star_rating.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/hierarchical_category_selector.dart';
 
@@ -615,8 +614,6 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildAnnonceCard(AnnonceListItem annonce) {
     final colors = Theme.of(context).extension<AppColors>()!;
     final isGoodDeal = annonce.isGoodDeal;
-    final hasSellerRating =
-        annonce.sellerRating != null && (annonce.sellerRatingCount ?? 0) > 0;
 
     return GestureDetector(
       onTap: () {
@@ -715,14 +712,6 @@ class _SearchScreenState extends State<SearchScreen> {
                         color: colors.textPrimary,
                       ),
                     ),
-                    if (hasSellerRating) ...[
-                      const SizedBox(height: 6),
-                      StarRating(
-                        average: annonce.sellerRating!,
-                        count: annonce.sellerRatingCount!,
-                        size: 13,
-                      ),
-                    ],
                     const Spacer(),
                     Text(
                       AppLocalizations.of(context)!

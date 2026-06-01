@@ -348,21 +348,30 @@ public class AnnoncesController : ControllerBase
     }
     
     /// <summary>
-    /// Get current user's annonces
+    /// Get current user's annonces (paginated)
     /// </summary>
     [HttpGet("my")]
     [Authorize]
-    public async Task<ActionResult<List<MyAnnonceDto>>> GetMyAnnonces()
+    public async Task<ActionResult<PaginatedResponse<MyAnnonceDto>>> GetMyAnnonces(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
-        
-        var annonces = await _context.Annonces
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = _context.Annonces
             .AsNoTracking()
-            .Include(a => a.Images)
-            .Include(a => a.Category)
-            .Where(a => a.UserId == userId.Value)
+            .Where(a => a.UserId == userId.Value);
+
+        var totalCount = await query.CountAsync();
+
+        var annonces = await query
             .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(a => new MyAnnonceDto
             {
                 Id = a.Id,
@@ -376,6 +385,7 @@ public class AnnoncesController : ControllerBase
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 IsGoodDeal = a.IsGoodDeal,
+                ReservationEnabled = a.ReservationEnabled,
                 ModerationThreadId = _context.Conversations
                     .Where(t => t.AnnonceId == a.Id && t.IsModeration)
                     .Select(t => (int?)t.Id)
@@ -383,8 +393,14 @@ public class AnnoncesController : ControllerBase
                 CreatedAt = a.CreatedAt
             })
             .ToListAsync();
-        
-        return Ok(annonces);
+
+        return Ok(new PaginatedResponse<MyAnnonceDto>
+        {
+            Items = annonces,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
     }
     
     /// <summary>
@@ -498,8 +514,6 @@ public class AnnoncesController : ControllerBase
     {
         return _context.Annonces
             .AsNoTracking()
-            .Include(a => a.Images)
-            .Include(a => a.Category)
             .Where(a => a.Id == annonceId)
             .Select(a => new MyAnnonceDto
             {
@@ -514,6 +528,7 @@ public class AnnoncesController : ControllerBase
                 MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
                 MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
                 IsGoodDeal = a.IsGoodDeal,
+                ReservationEnabled = a.ReservationEnabled,
                 ModerationThreadId = _context.Conversations
                     .Where(t => t.AnnonceId == a.Id && t.IsModeration)
                     .Select(t => (int?)t.Id)

@@ -124,6 +124,7 @@ public class MyAnnonceDto
     public string? MainImageUrl { get; set; }
     public string? MainThumbnailUrl { get; set; }
     public bool IsGoodDeal { get; set; }
+    public bool ReservationEnabled { get; set; }
     public int? ModerationThreadId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

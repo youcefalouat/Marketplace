@@ -21,6 +21,11 @@ class ChatProvider with ChangeNotifier {
   ChatRealtimeConnectionStatus _connectionStatus =
       ChatRealtimeConnectionStatus.disconnected;
 
+  // Conversation list pagination
+  int _conversationsPage = 1;
+  int _conversationsTotalPages = 1;
+  bool _isLoadingMoreConversations = false;
+
   List<Conversation> get conversations => _conversations;
   List<ChatMessage> get currentMessages => _currentMessages;
   bool get isLoading => _isLoading;
@@ -32,6 +37,9 @@ class ChatProvider with ChangeNotifier {
   ChatRealtimeConnectionStatus get connectionStatus => _connectionStatus;
   bool get isRealtimeConnected =>
       _connectionStatus == ChatRealtimeConnectionStatus.connected;
+  bool get hasMoreConversations =>
+      _conversationsPage < _conversationsTotalPages;
+  bool get isLoadingMoreConversations => _isLoadingMoreConversations;
 
   void setAuthToken(String? token) {
     setAuthSession(token: token, userId: _currentUserId);
@@ -221,7 +229,15 @@ class ChatProvider with ChangeNotifier {
     if (changed) notifyListeners();
   }
 
-  Future<void> loadConversations({bool showLoader = true}) async {
+  Future<void> loadConversations({
+    bool showLoader = true,
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      _conversationsPage = 1;
+      _conversations = [];
+    }
+
     if (showLoader) {
       _isLoading = true;
       _error = null;
@@ -229,7 +245,19 @@ class ChatProvider with ChangeNotifier {
     }
 
     try {
-      _conversations = await _chatService.getConversations();
+      final response = await _chatService.getConversations(
+        page: _conversationsPage,
+      );
+
+      if (refresh || _conversationsPage == 1) {
+        _conversations = response.items;
+      } else {
+        for (final conv in response.items) {
+          _upsertConversation(conv);
+        }
+      }
+
+      _conversationsTotalPages = response.totalPages;
       _conversations.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
 
       _conversationUnreadCounts = {
@@ -247,6 +275,33 @@ class ChatProvider with ChangeNotifier {
       if (showLoader) {
         _isLoading = false;
       }
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreConversations() async {
+    if (!hasMoreConversations || _isLoadingMoreConversations) return;
+
+    _isLoadingMoreConversations = true;
+    _conversationsPage++;
+    notifyListeners();
+
+    try {
+      final response = await _chatService.getConversations(
+        page: _conversationsPage,
+      );
+
+      for (final conv in response.items) {
+        _upsertConversation(conv);
+      }
+
+      _conversationsTotalPages = response.totalPages;
+      _conversations.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+    } catch (e) {
+      _conversationsPage--;
+      _error = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isLoadingMoreConversations = false;
       notifyListeners();
     }
   }

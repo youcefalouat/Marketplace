@@ -7,7 +7,6 @@ import '../providers/chat_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
-import '../widgets/star_rating.dart';
 import 'annonce_detail_screen.dart';
 import 'category_annonces_screen.dart';
 import 'conversation_list_screen.dart';
@@ -572,8 +571,6 @@ class _FeaturedAnnonceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
-    final hasSellerRating =
-        annonce.sellerRating != null && (annonce.sellerRatingCount ?? 0) > 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -681,14 +678,6 @@ class _FeaturedAnnonceCard extends StatelessWidget {
                         color: colors.textPrimary,
                       ),
                     ),
-                    if (hasSellerRating) ...[
-                      const SizedBox(height: AppLayout.spacing6),
-                      StarRating(
-                        average: annonce.sellerRating!,
-                        count: annonce.sellerRatingCount!,
-                        size: 13,
-                      ),
-                    ],
                     const Spacer(),
                     Directionality(
                       textDirection: TextDirection.ltr,

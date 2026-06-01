@@ -5,6 +5,7 @@ using MarketplaceApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MarketplaceApi.Models;
 
 namespace MarketplaceApi.Controllers;
 
@@ -54,20 +55,57 @@ public class ReservationsController : ControllerBase
     // GET /api/annonces/{annonceId}/reservations
     [HttpGet("/api/annonces/{annonceId:int}/reservations")]
     [Authorize]
-    public async Task<ActionResult<List<ReservationDto>>> GetReservations(int annonceId)
+    public async Task<ActionResult<PaginatedResponse<ReservationDto>>> GetReservations(
+        int annonceId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var annonce = await _context.Annonces.FindAsync(annonceId);
+        var annonce = await _context.Annonces
+            .AsNoTracking()
+            .Where(a => a.Id == annonceId)
+            .Select(a => new { a.UserId })
+            .FirstOrDefaultAsync();
+
         if (annonce == null) return NotFound(new { message = "Annonce introuvable" });
 
         var isAdmin = User.IsInRole("Admin");
         if (annonce.UserId != userId.Value && !isAdmin)
             return Forbid();
 
-        var reservations = await _reservationService.GetReservationsByAnnonceAsync(annonceId);
-        return Ok(reservations);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = _context.Reservations
+            .AsNoTracking()
+            .Where(r => r.AnnonceId == annonceId)
+            .OrderBy(r => r.Rank);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new ReservationDto
+            {
+                Id = r.Id,
+                Rank = r.Rank,
+                UserName = r.User.Name,
+                Phone = r.User.Phone ?? string.Empty,
+                ReservationDateTime = r.ReservationDateTime,
+                RendezVousDateTime = r.RendezVousDateTime
+            })
+            .ToListAsync();
+
+        return Ok(new PaginatedResponse<ReservationDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     // DELETE /api/reservations/{id}

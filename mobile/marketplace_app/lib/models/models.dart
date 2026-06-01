@@ -446,6 +446,7 @@ class MyAnnonce {
   final String? mainImageUrl;
   final String? mainThumbnailUrl;
   final bool isGoodDeal;
+  final bool reservationEnabled;
   final int? moderationThreadId;
   final DateTime createdAt;
 
@@ -460,6 +461,7 @@ class MyAnnonce {
     this.mainImageUrl,
     this.mainThumbnailUrl,
     required this.isGoodDeal,
+    this.reservationEnabled = false,
     this.moderationThreadId,
     required this.createdAt,
   });
@@ -478,8 +480,40 @@ class MyAnnonce {
       mainImageUrl: json['mainImageUrl'] as String?,
       mainThumbnailUrl: json['mainThumbnailUrl'] as String?,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
+      reservationEnabled: json['reservationEnabled'] as bool? ?? false,
       moderationThreadId: json['moderationThreadId'] as int?,
       createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+}
+
+class Reservation {
+  final int id;
+  final int rank;
+  final String userName;
+  final String phone;
+  final DateTime reservationDateTime;
+  final DateTime? rendezVousDateTime;
+
+  Reservation({
+    required this.id,
+    required this.rank,
+    required this.userName,
+    required this.phone,
+    required this.reservationDateTime,
+    this.rendezVousDateTime,
+  });
+
+  factory Reservation.fromJson(Map<String, dynamic> json) {
+    return Reservation(
+      id: _readInt(json['id']),
+      rank: _readInt(json['rank']),
+      userName: json['userName'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      reservationDateTime: _readDateTime(json['reservationDateTime']),
+      rendezVousDateTime: json['rendezVousDateTime'] is String
+          ? DateTime.tryParse(json['rendezVousDateTime'] as String)
+          : null,
     );
   }
 }

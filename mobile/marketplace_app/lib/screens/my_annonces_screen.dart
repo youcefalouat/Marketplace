@@ -8,6 +8,8 @@ import '../theme/app_colors.dart';
 import '../l10n/category_localizations.dart';
 import 'annonce_detail_screen.dart';
 import 'moderation_thread_screen.dart';
+import 'annonce_conversations_screen.dart';
+import 'annonce_reservations_screen.dart';
 
 class MyAnnoncesScreen extends StatefulWidget {
   const MyAnnoncesScreen({super.key});
@@ -17,21 +19,37 @@ class MyAnnoncesScreen extends StatefulWidget {
 }
 
 class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _loadMyAnnonces();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _loadMyAnnonces() {
-    Provider.of<AnnoncesProvider>(context, listen: false).loadMyAnnonces();
+    Provider.of<AnnoncesProvider>(context, listen: false)
+        .loadMyAnnonces(refresh: true);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      Provider.of<AnnoncesProvider>(context, listen: false)
+          .loadMoreMyAnnonces();
+    }
   }
 
   Future<void> _openAdminChatIfAvailable(MyAnnonce annonce) async {
     final threadId = annonce.moderationThreadId;
-    if (threadId == null) {
-      return;
-    }
+    if (threadId == null) return;
 
     try {
       final thread = await ApiService().getModerationThread(threadId);
@@ -129,6 +147,30 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     }
   }
 
+  void _openConversations(MyAnnonce annonce) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AnnonceConversationsScreen(
+          annonceId: annonce.id,
+          annonceTitle: annonce.title,
+        ),
+      ),
+    );
+  }
+
+  void _openReservations(MyAnnonce annonce) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AnnonceReservationsScreen(
+          annonceId: annonce.id,
+          annonceTitle: annonce.title,
+        ),
+      ),
+    );
+  }
+
   Color _getStatusColor(String status, AppColors colors) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -201,7 +243,8 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
       body: Consumer<AnnoncesProvider>(
         builder: (context, provider, child) {
           final colors = Theme.of(context).extension<AppColors>()!;
-          if (provider.isLoading && provider.myAnnonces.isEmpty) {
+
+          if (provider.isLoadingMyAnnonces && provider.myAnnonces.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -242,12 +285,22 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
             );
           }
 
+          final itemCount = provider.myAnnonces.length +
+              (provider.hasMoreMyAnnonces ? 1 : 0);
+
           return RefreshIndicator(
             onRefresh: () async => _loadMyAnnonces(),
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(AppLayout.screenPadding),
-              itemCount: provider.myAnnonces.length,
+              itemCount: itemCount,
               itemBuilder: (context, index) {
+                if (index >= provider.myAnnonces.length) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
                 return _buildAnnonceCard(provider.myAnnonces[index]);
               },
             ),
@@ -357,7 +410,7 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                   children: [
                     Text(
                       annonce.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
@@ -406,12 +459,16 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
                             color: statusColor,
                           ),
                           const SizedBox(width: AppLayout.spacing4),
-                          Text(
-                            _getStatusLabel(annonce.status),
-                            style: TextStyle(
-                              color: statusColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              _getStatusLabel(annonce.status),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -422,11 +479,67 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
               ),
             ),
 
-            // Delete button
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              color: colors.error,
-              onPressed: () => _deleteAnnonce(annonce),
+            // 3-dots context menu
+            PopupMenuButton<_AnnonceAction>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _AnnonceAction.conversations:
+                    _openConversations(annonce);
+                    break;
+                  case _AnnonceAction.reservations:
+                    _openReservations(annonce);
+                    break;
+                  case _AnnonceAction.delete:
+                    _deleteAnnonce(annonce);
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: _AnnonceAction.conversations,
+                  child: Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, size: 20),
+                      SizedBox(width: 12),
+                      Text('Conversations'),
+                    ],
+                  ),
+                ),
+                if (annonce.reservationEnabled)
+                  const PopupMenuItem(
+                    value: _AnnonceAction.reservations,
+                    child: Row(
+                      children: [
+                        Icon(Icons.people_outline, size: 20),
+                        SizedBox(width: 12),
+                        Text('Réservations'),
+                      ],
+                    ),
+                  ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: _AnnonceAction.delete,
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline,
+                          size: 20,
+                          color: Theme.of(context)
+                              .extension<AppColors>()!
+                              .error),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Supprimer',
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .extension<AppColors>()!
+                              .error,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -434,3 +547,5 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
     );
   }
 }
+
+enum _AnnonceAction { conversations, reservations, delete }

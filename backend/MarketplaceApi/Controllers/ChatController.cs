@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
+// PaginatedResponse<T> is defined in AnnonceDtos.cs (same DTOs namespace)
+
 namespace MarketplaceApi.Controllers;
 
 [Authorize]
@@ -39,17 +41,43 @@ public class ChatController : ControllerBase
     }
 
     [HttpGet("conversations")]
-    public async Task<ActionResult<IEnumerable<ConversationDto>>> GetConversations(CancellationToken cancellationToken)
+    public async Task<ActionResult<PaginatedResponse<ConversationDto>>> GetConversations(
+        [FromQuery] int? annonceId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var conversations = await BuildConversationDtoQuery(userId.Value)
-            .OrderByDescending(c => c.LastMessageAt)
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = BuildConversationDtoQuery(userId.Value);
+
+        if (annonceId.HasValue)
+        {
+            query = query.Where(c => c.AnnonceId == annonceId.Value);
+        }
+
+        query = query.OrderByDescending(c => c.LastMessageAt);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var conversations = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
 
         ApplyOnlineFlags(conversations);
-        return Ok(conversations);
+
+        return Ok(new PaginatedResponse<ConversationDto>
+        {
+            Items = conversations,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     [HttpGet("unread-count")]

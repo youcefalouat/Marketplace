@@ -15,6 +15,11 @@ class AnnoncesProvider with ChangeNotifier {
   int _currentPage = 1;
   int _totalPages = 1;
 
+  // My annonces pagination
+  int _myAnnoncesPage = 1;
+  int _myAnnoncesTotalPages = 1;
+  bool _isLoadingMyAnnonces = false;
+
   // Filters
   int? _categoryIdFilter;
   String? _searchQuery;
@@ -135,20 +140,45 @@ class AnnoncesProvider with ChangeNotifier {
     }
   }
 
-  Future<void> loadMyAnnonces() async {
-    _isLoading = true;
+  bool get hasMoreMyAnnonces => _myAnnoncesPage < _myAnnoncesTotalPages;
+  bool get isLoadingMyAnnonces => _isLoadingMyAnnonces;
+
+  Future<void> loadMyAnnonces({bool refresh = false}) async {
+    if (refresh) {
+      _myAnnoncesPage = 1;
+      _myAnnonces = [];
+    }
+
+    if (_isLoadingMyAnnonces) return;
+
+    _isLoadingMyAnnonces = true;
     _error = null;
     notifyListeners();
 
     try {
-      _myAnnonces = await _apiService.getMyAnnonces();
-      _isLoading = false;
-      notifyListeners();
+      final response = await _apiService.getMyAnnonces(
+        page: _myAnnoncesPage,
+      );
+
+      if (refresh || _myAnnoncesPage == 1) {
+        _myAnnonces = response.items;
+      } else {
+        _myAnnonces.addAll(response.items);
+      }
+
+      _myAnnoncesTotalPages = response.totalPages;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
-      _isLoading = false;
+    } finally {
+      _isLoadingMyAnnonces = false;
       notifyListeners();
     }
+  }
+
+  Future<void> loadMoreMyAnnonces() async {
+    if (!hasMoreMyAnnonces || _isLoadingMyAnnonces) return;
+    _myAnnoncesPage++;
+    await loadMyAnnonces();
   }
 
   Future<bool> createAnnonce({
