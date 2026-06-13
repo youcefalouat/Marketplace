@@ -8,7 +8,7 @@ namespace MarketplaceApi.Services;
 
 public interface IAnnonceFeedService
 {
-    Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count);
+    Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null);
 }
 
 public class AnnonceFeedService : IAnnonceFeedService
@@ -24,7 +24,7 @@ public class AnnonceFeedService : IAnnonceFeedService
         _options = options.Value ?? new FeaturedFeedOptions();
     }
 
-    public async Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count)
+    public async Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null)
     {
         var targetCount = count ?? _options.DefaultCount;
         targetCount = Math.Clamp(targetCount, 1, Math.Max(1, _options.MaxCount));
@@ -46,8 +46,11 @@ public class AnnonceFeedService : IAnnonceFeedService
 
         var randomRaw = await baseQuery
             .Where(a => !promotedIds.Contains(a.Id))
-            .OrderByDescending(a => a.IsGoodDeal)
-            .ThenBy(a => Guid.NewGuid()) // Fix #20: Randomize within priority tiers
+            .OrderBy(a =>
+                userCommuneId.HasValue && a.CommuneId == userCommuneId ? 0 :
+                userWilayaId.HasValue && a.WilayaId == userWilayaId ? 1 : 2)
+            .ThenByDescending(a => a.IsGoodDeal)
+            .ThenBy(a => Guid.NewGuid())
             .Take(remaining)
             .Select(a => new
             {

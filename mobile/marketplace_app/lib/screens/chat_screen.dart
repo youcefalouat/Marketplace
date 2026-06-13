@@ -9,10 +9,12 @@ import '../services/chat_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/marketplace_annonce_preview_card.dart';
 import 'annonce_detail_screen.dart';
+import 'seller_showcase_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final int conversationId;
   final String interlocutorName;
+  final int? interlocutorId;
   final int annonceId;
   final String annonceTitle;
   final String annonceImage;
@@ -25,6 +27,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.conversationId,
     required this.interlocutorName,
+    this.interlocutorId,
     required this.annonceId,
     required this.annonceTitle,
     required this.annonceImage,
@@ -149,15 +152,16 @@ class _ChatScreenState extends State<ChatScreen> {
         : widget.annonceStatus;
   }
 
-  Color _connectionStatusColor(ChatRealtimeConnectionStatus status) {
+  Color _connectionStatusColor(
+      ChatRealtimeConnectionStatus status, AppColors colors) {
     switch (status) {
       case ChatRealtimeConnectionStatus.connected:
-        return Colors.greenAccent.shade400;
+        return colors.accent;
       case ChatRealtimeConnectionStatus.connecting:
       case ChatRealtimeConnectionStatus.reconnecting:
-        return Colors.amberAccent.shade400;
+        return colors.warning;
       case ChatRealtimeConnectionStatus.disconnected:
-        return Colors.grey;
+        return colors.textTertiary;
     }
   }
 
@@ -185,22 +189,34 @@ class _ChatScreenState extends State<ChatScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Flexible(
-                  child: Text(
-                    widget.interlocutorName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16),
+                  child: GestureDetector(
+                    onTap: widget.interlocutorId != null
+                        ? () => navigateToSeller(context, widget.interlocutorId!)
+                        : null,
+                    child: Text(
+                      widget.interlocutorName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _connectionStatusColor(
-                      chatProvider.connectionStatus,
-                    ),
-                    shape: BoxShape.circle,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final colors =
+                        Theme.of(context).extension<AppColors>()!;
+                    return Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _connectionStatusColor(
+                          chatProvider.connectionStatus,
+                          colors,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                    );
+                  },
                 ),
               ],
             );
@@ -260,7 +276,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             )
                           : ListView.builder(
                               controller: _scrollController,
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppLayout.screenPadding,
+                                  vertical: AppLayout.spacing16),
                               itemCount: chatProvider.currentMessages.length,
                               itemBuilder: (context, index) {
                                 final message =
@@ -269,81 +287,111 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final colors =
                                     Theme.of(context).extension<AppColors>()!;
 
-                                return Align(
-                                  alignment: isMe
-                                      ? Alignment.centerRight
-                                      : Alignment.centerLeft,
-                                  child: Container(
-                                    margin:
-                                        const EdgeInsets.symmetric(vertical: 4),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
-                                    ),
-                                    constraints: BoxConstraints(
-                                      maxWidth:
-                                          MediaQuery.of(context).size.width *
-                                              0.75,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isMe
-                                          ? colors.primary
-                                          : colors.surfaceElevated1,
-                                      borderRadius:
-                                          BorderRadius.circular(20).copyWith(
-                                        bottomRight: isMe
-                                            ? const Radius.circular(0)
-                                            : const Radius.circular(20),
-                                        bottomLeft: !isMe
-                                            ? const Radius.circular(0)
-                                            : const Radius.circular(20),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          message.content,
-                                          style: TextStyle(
-                                            color: isMe
-                                                ? colors.textOnPrimary
-                                                : colors.textPrimary,
-                                          ),
+                                final showSeparator = index == 0 ||
+                                    !_isSameDay(
+                                      chatProvider
+                                          .currentMessages[index - 1].sentAt
+                                          .toLocal(),
+                                      message.sentAt.toLocal(),
+                                    );
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (showSeparator)
+                                      _ChatDateSeparator(
+                                          date: message.sentAt.toLocal()),
+                                    Align(
+                                      alignment: isMe
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: AppLayout.spacing4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppLayout.spacing16,
+                                          vertical: AppLayout.spacing8,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
+                                        constraints: BoxConstraints(
+                                          maxWidth:
+                                              MediaQuery.of(context).size.width *
+                                                  0.75,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isMe
+                                              ? colors.primary
+                                              : colors.surfaceElevated1,
+                                          borderRadius: BorderRadius.circular(
+                                                  AppLayout.radiusXL)
+                                              .copyWith(
+                                            bottomRight: isMe
+                                                ? const Radius.circular(0)
+                                                : Radius.circular(
+                                                    AppLayout.radiusXL),
+                                            bottomLeft: !isMe
+                                                ? const Radius.circular(0)
+                                                : Radius.circular(
+                                                    AppLayout.radiusXL),
+                                          ),
+                                          border: isMe
+                                              ? null
+                                              : Border.all(
+                                                  color: colors.borderSubtle),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              DateFormat('HH:mm').format(
-                                                  message.sentAt.toLocal()),
+                                              message.content,
                                               style: TextStyle(
-                                                fontSize: 10,
                                                 color: isMe
                                                     ? colors.textOnPrimary
-                                                        .withValues(alpha: 0.7)
-                                                    : colors.textTertiary,
+                                                    : colors.textPrimary,
                                               ),
                                             ),
-                                            if (isMe) ...[
-                                              const SizedBox(width: 4),
-                                              Icon(
-                                                _messageStatusIcon(message),
-                                                size: 12,
-                                                color: message.deliveryState ==
-                                                        MessageDeliveryState
-                                                            .failed
-                                                    ? colors.error
-                                                    : colors.textOnPrimary
-                                                        .withValues(alpha: 0.7),
-                                              ),
-                                            ],
+                                            const SizedBox(
+                                                height: AppLayout.spacing4),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  DateFormat('HH:mm').format(
+                                                      message.sentAt
+                                                          .toLocal()),
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isMe
+                                                        ? colors.textOnPrimary
+                                                            .withValues(
+                                                                alpha: 0.7)
+                                                        : colors.textTertiary,
+                                                  ),
+                                                ),
+                                                if (isMe) ...[
+                                                  const SizedBox(
+                                                      width:
+                                                          AppLayout.spacing4),
+                                                  Icon(
+                                                    _messageStatusIcon(message),
+                                                    size: 12,
+                                                    color: message
+                                                                .deliveryState ==
+                                                            MessageDeliveryState
+                                                                .failed
+                                                        ? colors.error
+                                                        : colors.textOnPrimary
+                                                            .withValues(
+                                                                alpha: 0.7),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
                                           ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 );
                               },
                             ),
@@ -397,7 +445,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.send),
-                            color: Theme.of(context).primaryColor,
+                            color: Theme.of(context)
+                                .extension<AppColors>()!
+                                .primary,
                             onPressed: _sendMessage,
                           ),
                         ],
@@ -422,5 +472,57 @@ class _ChatScreenState extends State<ChatScreen> {
       case MessageDeliveryState.sent:
         return message.isRead ? Icons.done_all : Icons.done;
     }
+  }
+
+  static bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+// ─────────────────────────────────────────────────────
+// Date separator chip shown between messages on different days
+// ─────────────────────────────────────────────────────
+
+class _ChatDateSeparator extends StatelessWidget {
+  const _ChatDateSeparator({required this.date});
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppLayout.spacing12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppLayout.spacing12,
+            vertical: AppLayout.spacing4,
+          ),
+          decoration: BoxDecoration(
+            color: colors.surfaceElevated2,
+            borderRadius: BorderRadius.circular(AppLayout.radiusFull),
+            border: Border.all(color: colors.borderSubtle),
+          ),
+          child: Text(
+            _label(date),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors.textTertiary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _label(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final day = DateTime(date.year, date.month, date.day);
+
+    if (day == today) return "Aujourd'hui";
+    if (day == yesterday) return 'Hier';
+    return DateFormat('d MMMM yyyy', 'fr').format(date);
   }
 }

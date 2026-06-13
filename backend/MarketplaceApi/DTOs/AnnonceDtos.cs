@@ -104,11 +104,13 @@ public class SellerInfoDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
     public string Phone { get; set; } = string.Empty;
     public string WilayaName { get; set; } = string.Empty;
     public string CommuneName { get; set; } = string.Empty;
     public double? AverageRating { get; set; }
     public int? RatingCount { get; set; }
+    public bool IsVerifiedSeller { get; set; }
 }
 
 public class MyAnnonceDto

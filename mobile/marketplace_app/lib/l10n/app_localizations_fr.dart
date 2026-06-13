@@ -328,4 +328,40 @@ class AppLocalizationsFr extends AppLocalizations {
   String errorWithMessage(String error) {
     return 'Erreur: $error';
   }
+
+  @override
+  String get annonces => 'Annonces';
+
+  @override
+  String get avis => 'Avis';
+
+  @override
+  String get noAnnoncesYet => 'Aucune annonce pour l\'instant';
+
+  @override
+  String get noReviewsYet => 'Aucun avis pour l\'instant';
+
+  @override
+  String get reservationMode => 'Mode réservation';
+
+  @override
+  String get reservationModeSubtitle =>
+      'Les acheteurs pourront réserver cette annonce';
+
+  @override
+  String get disabledInReservationMode => 'Désactivé en mode réservation';
+
+  @override
+  String get topVerifiedSellers => 'Top Vendeurs Vérifiés';
+
+  @override
+  String get conversationSearchHint =>
+      'Rechercher par vendeur, acheteur ou annonce...';
+
+  @override
+  String get noConversationsFound => 'Aucune conversation trouvée';
+
+  @override
+  String get noConversationsFoundHint =>
+      'Essayez de rechercher par nom de vendeur, d\'acheteur ou par titre d\'annonce.';
 }

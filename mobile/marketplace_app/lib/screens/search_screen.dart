@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/app_shimmer.dart';
+import '../widgets/app_states.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/annonces_provider.dart';
 import '../models/models.dart';
+import '../models/seller_models.dart';
 import '../theme/app_colors.dart';
 import 'annonce_detail_screen.dart';
+import 'seller_showcase_screen.dart';
 import '../services/api_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/hierarchical_category_selector.dart';
+import '../widgets/user_avatar.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? title;
@@ -25,8 +31,13 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _usersScrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  late TabController _tabController;
+  Timer? _debounceTimer;
 
   List<CategoryModel> _apiCategories = [];
   bool _loadingCategories = true;
@@ -34,13 +45,23 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Wilaya> _wilayas = [];
   bool _loadingWilayas = true;
 
+  // User search state
+  List<UserSearchResult> _userResults = [];
+  bool _loadingUsers = false;
+  int _userPage = 1;
+  int _userTotalPages = 1;
+  String _lastUserQuery = '';
+  int _searchVersion = 0;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadCategories();
     _loadWilayas();
     _loadAnnonces();
     _scrollController.addListener(_onScroll);
+    _usersScrollController.addListener(_onUsersScroll);
   }
 
   Future<void> _loadCategories() async {
@@ -81,8 +102,74 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _tabController.dispose();
     _scrollController.dispose();
+    _usersScrollController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _onUsersScroll() {
+    if (_usersScrollController.position.pixels >=
+            _usersScrollController.position.maxScrollExtent - 200 &&
+        !_loadingUsers &&
+        _userPage <= _userTotalPages) {
+      _searchUsers(_lastUserQuery, loadMore: true);
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      // Update annonces provider
+      final provider = Provider.of<AnnoncesProvider>(context, listen: false);
+      provider.setFilters(search: query.isEmpty ? null : query);
+      // Search users
+      _searchUsers(query, loadMore: false);
+    });
+  }
+
+  Future<void> _searchUsers(String query, {bool loadMore = false}) async {
+    if (!mounted) return;
+    final version = ++_searchVersion;
+
+    if (!loadMore) {
+      setState(() {
+        _userResults = [];
+        _userPage = 1;
+        _userTotalPages = 1;
+        _lastUserQuery = query;
+      });
+    }
+
+    if (query.trim().isEmpty && !loadMore) {
+      setState(() => _loadingUsers = false);
+      return;
+    }
+
+    setState(() => _loadingUsers = true);
+
+    try {
+      final response = await ApiService().searchUsers(
+        query,
+        page: loadMore ? _userPage : 1,
+      );
+      if (!mounted || version != _searchVersion) return;
+      setState(() {
+        if (loadMore) {
+          _userResults = [..._userResults, ...response.items];
+        } else {
+          _userResults = response.items;
+        }
+        _userTotalPages = response.totalPages;
+        _userPage = (loadMore ? _userPage : 1) + 1;
+        _loadingUsers = false;
+      });
+    } catch (_) {
+      if (!mounted || version != _searchVersion) return;
+      setState(() => _loadingUsers = false);
+    }
   }
 
   void _loadAnnonces() {
@@ -454,6 +541,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           children: [
             _buildSearchHeader(context),
+            _buildTabBar(),
             Expanded(child: _buildBody()),
           ],
         ),
@@ -470,11 +558,15 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: _buildSearchField(context),
+          preferredSize: const Size.fromHeight(112),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: _buildSearchField(context),
+              ),
+              _buildTabBar(),
+            ],
           ),
         ),
       ),
@@ -512,74 +604,89 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchField(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
     return TextField(
+      controller: _searchController,
       decoration: InputDecoration(
         hintText: AppLocalizations.of(context)!.searchHint,
         prefixIcon: const Icon(Icons.search),
         filled: true,
-        fillColor: Theme.of(context).cardColor,
-        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        fillColor: colors.surface,
+        contentPadding: EdgeInsets.zero,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(AppLayout.radiusFull),
           borderSide: BorderSide.none,
         ),
+        suffixIcon: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _searchController,
+          builder: (_, value, __) => value.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    _onSearchChanged('');
+                  },
+                )
+              : const SizedBox.shrink(),
+        ),
       ),
-      onSubmitted: (value) {
-        final provider = Provider.of<AnnoncesProvider>(context, listen: false);
-        provider.setFilters(search: value);
-      },
+      onChanged: _onSearchChanged,
+    );
+  }
+
+  Widget _buildTabBar() {
+    final l10n = AppLocalizations.of(context)!;
+    return TabBar(
+      controller: _tabController,
+      tabs: [
+        Tab(text: l10n.annonces),
+        Tab(text: l10n.seller),
+      ],
     );
   }
 
   Widget _buildBody() {
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _buildAnnoncesBody(),
+        _buildUsersBody(),
+      ],
+    );
+  }
+
+  Widget _buildAnnoncesBody() {
     return Consumer<AnnoncesProvider>(
       builder: (context, provider, child) {
+        final l10n = AppLocalizations.of(context)!;
+
         if (provider.isLoading && provider.annonces.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(),
+          return GridView.builder(
+            padding: const EdgeInsets.all(AppLayout.spacing12),
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.68,
+              crossAxisSpacing: AppLayout.spacing12,
+              mainAxisSpacing: AppLayout.spacing12,
+            ),
+            itemCount: 6,
+            itemBuilder: (_, __) => const _AnnonceCardSkeleton(),
           );
         }
 
         if (provider.error != null && provider.annonces.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline,
-                    size: 64,
-                    color:
-                        Theme.of(context).extension<AppColors>()!.textTertiary),
-                const SizedBox(height: 16),
-                Text(provider.error!),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _loadAnnonces,
-                  child: Text(AppLocalizations.of(context)!.retry),
-                ),
-              ],
-            ),
+          return AppErrorState(
+            message: provider.error!,
+            onRetry: _loadAnnonces,
+            retryLabel: l10n.retry,
           );
         }
 
         if (provider.annonces.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox_outlined,
-                    size: 64,
-                    color:
-                        Theme.of(context).extension<AppColors>()!.textTertiary),
-                const SizedBox(height: 16),
-                Text(
-                  AppLocalizations.of(context)!.noAnnoncesFound,
-                  style: TextStyle(
-                      color: Theme.of(context)
-                          .extension<AppColors>()!
-                          .textSecondary),
-                ),
-              ],
-            ),
+          return AppEmptyState(
+            icon: Icons.inbox_outlined,
+            title: l10n.noAnnoncesFound,
           );
         }
 
@@ -750,6 +857,168 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildUsersBody() {
+    final colors = Theme.of(context).extension<AppColors>()!;
+
+    if (_loadingUsers && _userResults.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_lastUserQuery.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search, size: 56, color: colors.textTertiary),
+            const SizedBox(height: 12),
+            Text(
+              'Recherchez un vendeur par nom ou lieu',
+              style: TextStyle(color: colors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_userResults.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_off_outlined, size: 56, color: colors.textTertiary),
+            const SizedBox(height: 12),
+            Text(
+              'Aucun vendeur trouvé',
+              style: TextStyle(color: colors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: _usersScrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: _userResults.length + (_userPage <= _userTotalPages ? 1 : 0),
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        if (index >= _userResults.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        final user = _userResults[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+          leading: UserAvatar(
+            avatarUrl: user.avatarUrl,
+            name: user.name,
+            radius: 22,
+          ),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  user.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (user.isVerifiedSeller) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.verified, size: 14, color: colors.primary),
+              ],
+            ],
+          ),
+          subtitle: Text(
+            '${user.communeName}, ${user.wilayaName}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: colors.textTertiary),
+          ),
+          trailing: user.averageRating != null
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star, size: 14, color: colors.starRating),
+                    const SizedBox(width: 2),
+                    Text(
+                      user.averageRating!.toStringAsFixed(1),
+                      style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                    ),
+                  ],
+                )
+              : null,
+          onTap: () => navigateToSeller(context, user.id),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// Skeleton card matching the annonce grid card proportions
+// ─────────────────────────────────────────────────────
+
+class _AnnonceCardSkeleton extends StatelessWidget {
+  const _AnnonceCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated1,
+        borderRadius: AppLayout.borderRadiusMedium,
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: ShimmerBox(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppLayout.radiusMedium),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(AppLayout.spacing8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ShimmerBox(height: 13),
+                  const SizedBox(height: AppLayout.spacing6),
+                  const ShimmerBox(height: 13),
+                  const Spacer(),
+                  ShimmerBox(
+                    width: 80,
+                    height: 15,
+                    borderRadius: AppLayout.borderRadiusSmall,
+                  ),
+                  const SizedBox(height: AppLayout.spacing4),
+                  ShimmerBox(
+                    width: 60,
+                    height: 11,
+                    borderRadius: AppLayout.borderRadiusSmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

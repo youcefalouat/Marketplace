@@ -471,9 +471,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
 
             // Reservation mode toggle
             SwitchListTile(
-              title: const Text('Mode réservation'),
-              subtitle: const Text(
-                  'Les acheteurs pourront réserver cette annonce'),
+              title: Text(l10n.reservationMode),
+              subtitle: Text(l10n.reservationModeSubtitle),
               value: _reservationEnabled,
               onChanged: (value) {
                 setState(() {
@@ -492,7 +491,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             SwitchListTile(
               title: Text(l10n.exchangePossible),
               subtitle: Text(_reservationEnabled
-                  ? 'Désactivé en mode réservation'
+                  ? l10n.disabledInReservationMode
                   : l10n.exchangeSubtitle),
               value: _isExchange,
               onChanged: _reservationEnabled
@@ -526,7 +525,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             SwitchListTile(
               title: Text(l10n.showPhone),
               subtitle: Text(_reservationEnabled
-                  ? 'Désactivé en mode réservation'
+                  ? l10n.disabledInReservationMode
                   : l10n.showPhoneSubtitle),
               value: _showPhone,
               onChanged: _reservationEnabled

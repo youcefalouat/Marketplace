@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,6 +14,7 @@ import 'providers/chat_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/reservation_provider.dart';
+import 'providers/sellers_provider.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_colors.dart';
 
@@ -34,8 +36,71 @@ void main() async {
   runApp(const MarketplaceApp());
 }
 
-class MarketplaceApp extends StatelessWidget {
+class MarketplaceApp extends StatefulWidget {
   const MarketplaceApp({super.key});
+
+  @override
+  State<MarketplaceApp> createState() => _MarketplaceAppState();
+}
+
+class _MarketplaceAppState extends State<MarketplaceApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    final appLinks = AppLinks();
+
+    // Handle initial link (app launched from a deep link)
+    try {
+      final initialUri = await appLinks.getInitialLink();
+      if (initialUri != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handleDeepLink(initialUri);
+        });
+      }
+    } catch (_) {}
+
+    // Handle links while app is already running
+    appLinks.uriLinkStream.listen(
+      _handleDeepLink,
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _handleDeepLink(Uri uri) async {
+    if (uri.scheme == 'myapp' && uri.host == 'email-verified') {
+      // Refresh user profile so emailVerified flag is up to date
+      final ctx = _navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        try {
+          await Provider.of<AuthProvider>(ctx, listen: false).refreshUser();
+        } catch (_) {}
+      }
+
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+
+      // Show a brief success message
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final navCtx = _navigatorKey.currentContext;
+        if (navCtx != null && navCtx.mounted) {
+          ScaffoldMessenger.of(navCtx).showSnackBar(
+            const SnackBar(
+              content: Text('Votre adresse email a été vérifiée avec succès.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +111,7 @@ class MarketplaceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => AnnoncesProvider()),
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
+        ChangeNotifierProvider(create: (_) => SellersProvider()),
         ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
           create: (_) => ChatProvider(),
           update: (_, authProvider, chatProvider) {
@@ -61,6 +127,7 @@ class MarketplaceApp extends StatelessWidget {
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (context, themeProvider, localeProvider, child) {
           return MaterialApp(
+            navigatorKey: _navigatorKey,
             title: 'Marketplace',
             debugShowCheckedModeBanner: false,
             localizationsDelegates: const [

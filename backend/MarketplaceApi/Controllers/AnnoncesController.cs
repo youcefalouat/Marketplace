@@ -205,9 +205,12 @@ public class AnnoncesController : ControllerBase
     /// Featured/random feed for home discovery (public)
     /// </summary>
     [HttpGet("featured")]
-    public async Task<ActionResult<List<AnnonceListDto>>> GetFeatured([FromQuery] int? count)
+    public async Task<ActionResult<List<AnnonceListDto>>> GetFeatured(
+        [FromQuery] int? count,
+        [FromQuery] int? communeId,
+        [FromQuery] int? wilayaId)
     {
-        var featured = await _feedService.GetFeaturedAnnoncesAsync(count);
+        var featured = await _feedService.GetFeaturedAnnoncesAsync(count, communeId, wilayaId);
         return Ok(featured);
     }
     
@@ -499,11 +502,13 @@ public class AnnoncesController : ControllerBase
             {
                 Id = annonce.UserId,
                 Name = annonce.User.Name,
+                AvatarUrl = annonce.User.AvatarUrl,
                 Phone = annonce.ShowPhone ? annonce.User.Phone : string.Empty,
                 WilayaName = annonce.User.Wilaya.Name,
                 CommuneName = annonce.User.Commune.Name,
                 AverageRating = avg,
-                RatingCount = count
+                RatingCount = count,
+                IsVerifiedSeller = annonce.User.IsVerifiedSeller
             }
         };
         

@@ -18,7 +18,11 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(opts =>
+{
+    opts.JsonSerializerOptions.Converters.Add(new MarketplaceApi.Infrastructure.UtcDateTimeJsonConverter());
+    opts.JsonSerializerOptions.Converters.Add(new MarketplaceApi.Infrastructure.NullableUtcDateTimeJsonConverter());
+});
 builder.Services.AddMemoryCache();
 builder.Services.AddSignalR(options =>
 {
@@ -158,6 +162,11 @@ catch (Exception)
 // Configure Twilio
 builder.Services.Configure<MarketplaceApi.Models.TwilioSettings>(builder.Configuration.GetSection("Twilio"));
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+
+// Configure Email
+builder.Services.Configure<MarketplaceApi.Services.EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>

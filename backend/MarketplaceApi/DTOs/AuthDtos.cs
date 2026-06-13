@@ -75,6 +75,8 @@ public class UserDto
     public string Role { get; set; } = string.Empty;
     public bool PhoneVerified { get; set; }
     public bool EmailVerified { get; set; }
+    public string? AvatarUrl { get; set; }
+    public bool IsVerifiedSeller { get; set; }
 }
 
 public class UpdateProfileDto
@@ -145,4 +147,28 @@ public class PhoneLoginVerifyDto
 
     [Required]
     public string Code { get; set; } = string.Empty;
+}
+
+public class RegisterResultDto
+{
+    public bool Success { get; set; } = true;
+    public bool EmailVerificationRequired { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public UserDto User { get; set; } = null!;
+}
+
+public class ResendVerificationDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+}
+
+public class LegalContentDto
+{
+    public string TitleFr { get; set; } = string.Empty;
+    public string ContentFr { get; set; } = string.Empty;
+    public string TitleAr { get; set; } = string.Empty;
+    public string ContentAr { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; }
 }

@@ -141,5 +141,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "annonces": "Annonces",
+  "avis": "Avis",
+  "noAnnoncesYet": "Aucune annonce pour l'instant",
+  "noReviewsYet": "Aucun avis pour l'instant",
+  "reservationMode": "Mode réservation",
+  "reservationModeSubtitle": "Les acheteurs pourront réserver cette annonce",
+  "disabledInReservationMode": "Désactivé en mode réservation",
+  "topVerifiedSellers": "Top Vendeurs Vérifiés",
+  "conversationSearchHint": "Rechercher par vendeur, acheteur ou annonce...",
+  "noConversationsFound": "Aucune conversation trouvée",
+  "noConversationsFoundHint": "Essayez de rechercher par nom de vendeur, d'acheteur ou par titre d'annonce."
 }

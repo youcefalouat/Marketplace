@@ -321,4 +321,38 @@ class AppLocalizationsAr extends AppLocalizations {
   String errorWithMessage(String error) {
     return 'خطأ: $error';
   }
+
+  @override
+  String get annonces => 'الإعلانات';
+
+  @override
+  String get avis => 'التقييمات';
+
+  @override
+  String get noAnnoncesYet => 'لا توجد إعلانات حتى الآن';
+
+  @override
+  String get noReviewsYet => 'لا توجد تقييمات حتى الآن';
+
+  @override
+  String get reservationMode => 'وضع الحجز';
+
+  @override
+  String get reservationModeSubtitle => 'يمكن للمشترين حجز هذا الإعلان';
+
+  @override
+  String get disabledInReservationMode => 'معطّل في وضع الحجز';
+
+  @override
+  String get topVerifiedSellers => 'أفضل البائعين الموثوقين';
+
+  @override
+  String get conversationSearchHint => 'ابحث بالاسم أو عنوان الإعلان...';
+
+  @override
+  String get noConversationsFound => 'لا توجد محادثات مطابقة';
+
+  @override
+  String get noConversationsFoundHint =>
+      'جرّب البحث باسم البائع أو المشتري أو عنوان الإعلان.';
 }

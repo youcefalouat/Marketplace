@@ -21,8 +21,12 @@ int _readInt(dynamic value, {int fallback = 0}) {
   return fallback;
 }
 
+// Always returns a UTC DateTime, even if the server omits the 'Z' suffix.
 DateTime _readDateTime(dynamic value) {
-  if (value is String) return DateTime.parse(value);
+  if (value is String) {
+    final s = value.endsWith('Z') || value.contains('+') ? value : '${value}Z';
+    return DateTime.parse(s).toUtc();
+  }
   return DateTime.now().toUtc();
 }
 
@@ -179,6 +183,8 @@ class User {
   final String? providerId;
   final bool phoneVerified;
   final bool emailVerified;
+  final String? avatarUrl;
+  final bool isVerifiedSeller;
 
   User({
     required this.id,
@@ -194,6 +200,8 @@ class User {
     this.providerId,
     this.phoneVerified = false,
     this.emailVerified = false,
+    this.avatarUrl,
+    this.isVerifiedSeller = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -211,6 +219,8 @@ class User {
       providerId: json['providerId'] as String?,
       phoneVerified: json['phoneVerified'] as bool? ?? false,
       emailVerified: json['emailVerified'] as bool? ?? false,
+      avatarUrl: json['avatarUrl'] as String?,
+      isVerifiedSeller: json['isVerifiedSeller'] as bool? ?? false,
     );
   }
 
@@ -229,6 +239,8 @@ class User {
       'providerId': providerId,
       'phoneVerified': phoneVerified,
       'emailVerified': emailVerified,
+      'avatarUrl': avatarUrl,
+      'isVerifiedSeller': isVerifiedSeller,
     };
   }
 }
@@ -245,6 +257,58 @@ class AuthResponse {
       user: User.fromJson(json['user'] as Map<String, dynamic>),
     );
   }
+}
+
+class RegisterResult {
+  final String token;
+  final User user;
+  final bool emailVerificationRequired;
+
+  RegisterResult({
+    required this.token,
+    required this.user,
+    this.emailVerificationRequired = false,
+  });
+
+  factory RegisterResult.fromJson(Map<String, dynamic> json) {
+    return RegisterResult(
+      token: json['token'] as String,
+      user: User.fromJson(json['user'] as Map<String, dynamic>),
+      emailVerificationRequired: json['emailVerificationRequired'] as bool? ?? false,
+    );
+  }
+}
+
+class LegalContent {
+  final String titleFr;
+  final String contentFr;
+  final String titleAr;
+  final String contentAr;
+  final DateTime updatedAt;
+
+  LegalContent({
+    required this.titleFr,
+    required this.contentFr,
+    required this.titleAr,
+    required this.contentAr,
+    required this.updatedAt,
+  });
+
+  factory LegalContent.fromJson(Map<String, dynamic> json) {
+    return LegalContent(
+      titleFr: json['titleFr'] as String? ?? '',
+      contentFr: json['contentFr'] as String? ?? '',
+      titleAr: json['titleAr'] as String? ?? '',
+      contentAr: json['contentAr'] as String? ?? '',
+      updatedAt: _readDateTime(json['updatedAt']),
+    );
+  }
+
+  String titleForLanguage(String languageCode) =>
+      languageCode == 'ar' ? titleAr : titleFr;
+
+  String contentForLanguage(String languageCode) =>
+      languageCode == 'ar' ? contentAr : contentFr;
 }
 
 class ImageUrlDto {
@@ -320,7 +384,7 @@ class AnnonceListItem {
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       sellerRating: (json['sellerAverageRating'] as num?)?.toDouble(),
       sellerRatingCount: json['sellerRatingCount'] as int?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: _readDateTime(json['createdAt']),
     );
   }
 }
@@ -328,31 +392,37 @@ class AnnonceListItem {
 class SellerInfo {
   final int id;
   final String name;
+  final String? avatarUrl;
   final String phone;
   final String wilayaName;
   final String communeName;
   final double? averageRating;
   final int? ratingCount;
+  final bool isVerifiedSeller;
 
   SellerInfo({
     required this.id,
     required this.name,
+    this.avatarUrl,
     required this.phone,
     required this.wilayaName,
     required this.communeName,
     this.averageRating,
     this.ratingCount,
+    this.isVerifiedSeller = false,
   });
 
   factory SellerInfo.fromJson(Map<String, dynamic> json) {
     return SellerInfo(
       id: json['id'] as int? ?? 0,
       name: json['name'] as String,
+      avatarUrl: json['avatarUrl'] as String?,
       phone: json['phone'] as String,
       wilayaName: json['wilayaName'] as String? ?? '',
       communeName: json['communeName'] as String? ?? '',
       averageRating: (json['averageRating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
+      isVerifiedSeller: json['isVerifiedSeller'] as bool? ?? false,
     );
   }
 }
@@ -426,7 +496,7 @@ class AnnonceDetail {
       status: json['status'] as String,
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       reservationEnabled: json['reservationEnabled'] as bool? ?? false,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: _readDateTime(json['createdAt']),
       imageUrls: (json['imageUrls'] as List<dynamic>)
           .map((e) => ImageUrlDto.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -482,7 +552,7 @@ class MyAnnonce {
       isGoodDeal: json['isGoodDeal'] as bool? ?? false,
       reservationEnabled: json['reservationEnabled'] as bool? ?? false,
       moderationThreadId: json['moderationThreadId'] as int?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: _readDateTime(json['createdAt']),
     );
   }
 }
@@ -512,7 +582,7 @@ class Reservation {
       phone: json['phone'] as String? ?? '',
       reservationDateTime: _readDateTime(json['reservationDateTime']),
       rendezVousDateTime: json['rendezVousDateTime'] is String
-          ? DateTime.tryParse(json['rendezVousDateTime'] as String)
+          ? _readDateTime(json['rendezVousDateTime'])
           : null,
     );
   }
@@ -860,8 +930,8 @@ class ModerationThread {
       annonceStatus: json['annonceStatus'] as String? ?? '',
       ownerId: json['ownerId'] as int,
       ownerName: json['ownerName'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      lastMessageAt: DateTime.parse(json['lastMessageAt'] as String),
+      createdAt: _readDateTime(json['createdAt']),
+      lastMessageAt: _readDateTime(json['lastMessageAt']),
       isClosed: json['isClosed'] as bool? ?? false,
       messages: (json['messages'] as List<dynamic>? ?? [])
           .map((item) =>
@@ -899,7 +969,7 @@ class ModerationMessage {
       senderId: json['senderId'] as int,
       senderName: json['senderName'] as String? ?? '',
       content: json['content'] as String? ?? '',
-      sentAt: DateTime.parse(json['sentAt'] as String),
+      sentAt: _readDateTime(json['sentAt']),
       isFromAdmin: json['isFromAdmin'] as bool? ?? false,
       isMe: json['isMe'] as bool? ?? false,
     );

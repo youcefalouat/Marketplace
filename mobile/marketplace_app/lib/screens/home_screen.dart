@@ -1,12 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../widgets/app_shimmer.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/sellers_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/user_avatar.dart';
 import 'annonce_detail_screen.dart';
 import 'category_annonces_screen.dart';
 import 'conversation_list_screen.dart';
@@ -14,6 +17,7 @@ import 'create_annonce_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
+import 'seller_showcase_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/category_localizations.dart';
 
@@ -42,15 +46,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadAccueilData() async {
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
     await Future.wait([
-      _loadFeaturedAnnonces(),
+      _loadFeaturedAnnonces(
+          communeId: user?.communeId, wilayaId: user?.wilayaId),
       _loadLeafCategories(),
     ]);
+    if (!mounted) return;
+    Provider.of<SellersProvider>(context, listen: false).loadTopVerifiedUsers(
+      communeId: user?.communeId,
+      wilayaId: user?.wilayaId,
+    );
   }
 
-  Future<void> _loadFeaturedAnnonces() async {
+  Future<void> _loadFeaturedAnnonces({int? communeId, int? wilayaId}) async {
     try {
-      final featured = await _apiService.getFeaturedAnnonces(count: 20);
+      final featured = await _apiService.getFeaturedAnnonces(
+        count: 20,
+        communeId: communeId,
+        wilayaId: wilayaId,
+      );
       if (!mounted) return;
       setState(() {
         _featuredAnnonces = featured;
@@ -254,6 +269,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: AppLayout.spacing16),
           _buildFeaturedSection(),
           const SizedBox(height: 28),
+          _buildTopVerifiedUsersSection(),
+          const SizedBox(height: 28),
           _buildSectionHeader(
             title: AppLocalizations.of(context)!.exploreByCategory,
             subtitle: '',
@@ -294,9 +311,15 @@ class _HomeScreenState extends State<HomeScreen> {
     const featuredCarouselHeight = 292.0;
 
     if (_loadingFeatured) {
-      return const SizedBox(
+      return SizedBox(
         height: featuredCarouselHeight,
-        child: Center(child: CircularProgressIndicator()),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: 3,
+          separatorBuilder: (_, __) => const SizedBox(width: 14),
+          itemBuilder: (_, __) => const _FeaturedCardSkeleton(),
+        ),
       );
     }
 
@@ -346,13 +369,152 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildTopVerifiedUsersSection() {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final sellersProvider = context.watch<SellersProvider>();
+
+    if (sellersProvider.loadingTopUsers) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppLocalizations.of(context)!.topVerifiedSellers,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppLayout.spacing12),
+          SizedBox(
+            height: 130,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, __) => const _SellerCardSkeleton(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (sellersProvider.topVerifiedUsers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          AppLocalizations.of(context)!.topVerifiedSellers,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: AppLayout.spacing12),
+        SizedBox(
+          height: 130,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: sellersProvider.topVerifiedUsers.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final seller = sellersProvider.topVerifiedUsers[index];
+              return GestureDetector(
+                onTap: () => navigateToSeller(context, seller.id),
+                child: Container(
+                  width: 100,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceElevated1,
+                    borderRadius: AppLayout.borderRadiusLarge,
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      UserAvatar(
+                        avatarUrl: seller.avatarUrl,
+                        name: seller.name,
+                        radius: 24,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              seller.name,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: colors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Icons.verified, size: 11, color: colors.primary),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        seller.communeName,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: colors.textTertiary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                      if (seller.averageRating != null) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.star,
+                                size: 10, color: colors.starRating),
+                            const SizedBox(width: 2),
+                            Text(
+                              seller.averageRating!.toStringAsFixed(1),
+                              style: TextStyle(
+                                  fontSize: 10, color: colors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCategorySection() {
     final colors = Theme.of(context).extension<AppColors>()!;
 
     if (_loadingCategories) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppLayout.spacing24),
-        child: Center(child: CircularProgressIndicator()),
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: AppLayout.spacing12,
+          mainAxisSpacing: AppLayout.spacing12,
+          childAspectRatio: 1.2,
+        ),
+        itemCount: 6,
+        itemBuilder: (_, __) => const _CategoryCardSkeleton(),
       );
     }
 
@@ -572,8 +734,9 @@ class _FeaturedAnnonceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
 
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
       child: Container(
         width: 215,
         decoration: BoxDecoration(
@@ -722,6 +885,145 @@ class _FeaturedAnnonceCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// Skeleton widgets for loading states
+// ─────────────────────────────────────────────────────
+
+class _FeaturedCardSkeleton extends StatelessWidget {
+  const _FeaturedCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Container(
+      width: 215,
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated1,
+        borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: ShimmerBox(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppLayout.radiusLarge),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(AppLayout.cardPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ShimmerBox(height: 14),
+                  const SizedBox(height: AppLayout.spacing8),
+                  ShimmerBox(
+                    width: 130,
+                    height: 12,
+                    borderRadius: AppLayout.borderRadiusSmall,
+                  ),
+                  const Spacer(),
+                  ShimmerBox(
+                    width: 90,
+                    height: 18,
+                    borderRadius: AppLayout.borderRadiusSmall,
+                  ),
+                  const SizedBox(height: AppLayout.spacing6),
+                  ShimmerBox(
+                    width: 80,
+                    height: 11,
+                    borderRadius: AppLayout.borderRadiusSmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SellerCardSkeleton extends StatelessWidget {
+  const _SellerCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Container(
+      width: 100,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated1,
+        borderRadius: AppLayout.borderRadiusLarge,
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ShimmerBox(
+            width: 48,
+            height: 48,
+            borderRadius: BorderRadius.circular(AppLayout.radiusFull),
+          ),
+          const SizedBox(height: AppLayout.spacing8),
+          ShimmerBox(
+            width: 64,
+            height: 11,
+            borderRadius: AppLayout.borderRadiusSmall,
+          ),
+          const SizedBox(height: AppLayout.spacing6),
+          ShimmerBox(
+            width: 50,
+            height: 10,
+            borderRadius: AppLayout.borderRadiusSmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryCardSkeleton extends StatelessWidget {
+  const _CategoryCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated1,
+        borderRadius: BorderRadius.circular(AppLayout.radiusLarge),
+        border: Border.all(color: colors.border),
+      ),
+      padding: const EdgeInsets.all(AppLayout.cardPaddingLarge),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ShimmerBox(
+            width: 42,
+            height: 42,
+            borderRadius: AppLayout.borderRadiusMedium,
+          ),
+          const Spacer(),
+          const ShimmerBox(height: 16),
+          const SizedBox(height: AppLayout.spacing8),
+          ShimmerBox(
+            width: 80,
+            height: 12,
+            borderRadius: AppLayout.borderRadiusSmall,
+          ),
+        ],
       ),
     );
   }

@@ -26,6 +26,9 @@ class ChatProvider with ChangeNotifier {
   int _conversationsTotalPages = 1;
   bool _isLoadingMoreConversations = false;
 
+  // Search
+  String _searchQuery = '';
+
   List<Conversation> get conversations => _conversations;
   List<ChatMessage> get currentMessages => _currentMessages;
   bool get isLoading => _isLoading;
@@ -40,6 +43,19 @@ class ChatProvider with ChangeNotifier {
   bool get hasMoreConversations =>
       _conversationsPage < _conversationsTotalPages;
   bool get isLoadingMoreConversations => _isLoadingMoreConversations;
+
+  String get searchQuery => _searchQuery;
+
+  /// Returns conversations filtered by the current search query.
+  /// Matching is case- and accent-insensitive across interlocutor name and annonce title.
+  List<Conversation> get filteredConversations {
+    if (_searchQuery.isEmpty) return _conversations;
+    final q = _normalize(_searchQuery);
+    return _conversations.where((c) {
+      return _normalize(c.interlocutorName).contains(q) ||
+          _normalize(c.annonceTitle).contains(q);
+    }).toList();
+  }
 
   void setAuthToken(String? token) {
     setAuthSession(token: token, userId: _currentUserId);
@@ -92,6 +108,7 @@ class ChatProvider with ChangeNotifier {
     _totalUnreadCount = 0;
     _error = null;
     _connectionStatus = ChatRealtimeConnectionStatus.disconnected;
+    _searchQuery = '';
   }
 
   void _wireRealtimeCallbacks() {
@@ -289,6 +306,7 @@ class ChatProvider with ChangeNotifier {
     try {
       final response = await _chatService.getConversations(
         page: _conversationsPage,
+        search: _searchQuery.isNotEmpty ? _searchQuery : null,
       );
 
       for (final conv in response.items) {
@@ -571,6 +589,62 @@ class ChatProvider with ChangeNotifier {
         hasUnreadMessages: count > 0,
       );
     }).toList();
+  }
+
+  /// Updates the active search query and triggers a server-side refresh.
+  /// The debounce (300 ms) lives in the screen; this method applies instantly.
+  void setSearchQuery(String query) {
+    final trimmed = query.trim();
+    if (trimmed == _searchQuery) return;
+    _searchQuery = trimmed;
+    notifyListeners(); // local filter via filteredConversations kicks in immediately
+
+    if (trimmed.isEmpty) {
+      unawaited(loadConversations(refresh: true, showLoader: false));
+    } else {
+      unawaited(_searchConversations(trimmed));
+    }
+  }
+
+  /// Refreshes the conversation list while honouring the active search query.
+  /// Use this instead of [loadConversations] when navigating back to the screen.
+  Future<void> refreshConversations() async {
+    if (_searchQuery.isNotEmpty) {
+      await _searchConversations(_searchQuery);
+    } else {
+      await loadConversations(refresh: true);
+    }
+  }
+
+  Future<void> _searchConversations(String query) async {
+    try {
+      final response = await _chatService.getConversations(
+        page: 1,
+        search: query,
+      );
+      // Discard stale response if the query changed while the request was in flight.
+      if (_searchQuery != query) return;
+      _conversations = response.items;
+      _conversationsTotalPages = response.totalPages;
+      _conversationsPage = 1;
+      _conversations.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+      notifyListeners();
+    } catch (_) {
+      // The local filter from filteredConversations stays active on network error.
+    }
+  }
+
+  /// Strips accents and lowercases [s] for accent-insensitive comparison.
+  static String _normalize(String s) {
+    return s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[àáâãäå]'), 'a')
+        .replaceAll(RegExp(r'[èéêë]'), 'e')
+        .replaceAll(RegExp(r'[ìíîï]'), 'i')
+        .replaceAll(RegExp(r'[òóôõö]'), 'o')
+        .replaceAll(RegExp(r'[ùúûü]'), 'u')
+        .replaceAll(RegExp(r'[ñ]'), 'n')
+        .replaceAll(RegExp(r'[ç]'), 'c');
   }
 
   void _sortCurrentMessages() {

@@ -235,12 +235,14 @@ class ChatService {
   Future<PaginatedResponse<Conversation>> getConversations({
     int page = 1,
     int pageSize = 20,
+    String? search,
   }) async {
     final path = Uri(
       path: '/chat/conversations',
       queryParameters: {
         'page': page.toString(),
         'pageSize': pageSize.toString(),
+        if (search != null && search.isNotEmpty) 'search': search,
       },
     ).toString();
 

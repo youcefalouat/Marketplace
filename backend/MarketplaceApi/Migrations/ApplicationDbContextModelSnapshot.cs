@@ -443,6 +443,10 @@ namespace MarketplaceApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("CommuneId")
                         .HasColumnType("int");
 
@@ -455,8 +459,8 @@ namespace MarketplaceApi.Migrations
                         .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("EmailVerificationCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<DateTime?>("EmailVerificationExpiry")
                         .HasColumnType("datetime2");
@@ -469,6 +473,9 @@ namespace MarketplaceApi.Migrations
                         .HasColumnType("nvarchar(255)");
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVerifiedSeller")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
@@ -505,6 +512,9 @@ namespace MarketplaceApi.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("WilayaId")
                         .HasColumnType("int");

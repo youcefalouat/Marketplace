@@ -141,5 +141,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "annonces": "الإعلانات",
+  "avis": "التقييمات",
+  "noAnnoncesYet": "لا توجد إعلانات حتى الآن",
+  "noReviewsYet": "لا توجد تقييمات حتى الآن",
+  "reservationMode": "وضع الحجز",
+  "reservationModeSubtitle": "يمكن للمشترين حجز هذا الإعلان",
+  "disabledInReservationMode": "معطّل في وضع الحجز",
+  "topVerifiedSellers": "أفضل البائعين الموثوقين",
+  "conversationSearchHint": "ابحث بالاسم أو عنوان الإعلان...",
+  "noConversationsFound": "لا توجد محادثات مطابقة",
+  "noConversationsFoundHint": "جرّب البحث باسم البائع أو المشتري أو عنوان الإعلان."
 }

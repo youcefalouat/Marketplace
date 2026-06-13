@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../services/social_auth_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
+import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 import 'complete_profile_screen.dart';
@@ -38,12 +39,22 @@ class _LoginScreenState extends State<LoginScreen> {
       password: _passwordController.text,
     );
 
-    if (success && mounted) {
+    if (!mounted) return;
+
+    if (success) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
-    } else if (mounted) {
+    } else if (authProvider.emailNotVerified) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationScreen(
+            email: _emailController.text.trim(),
+          ),
+        ),
+      );
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.error ?? 'Erreur de connexion'),

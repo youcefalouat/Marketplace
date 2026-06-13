@@ -117,7 +117,7 @@ else
                                             <td><span class="badge bg-secondary">#@res.Rank</span></td>
                                             <td>@res.User.Name</td>
                                             <td>@res.User.Phone</td>
-                                            <td>@res.ReservationDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@DateTime.SpecifyKind(res.ReservationDateTime, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                             <td>
                                                 <input type="datetime-local"
                                                        class="form-control form-control-sm"
@@ -359,7 +359,11 @@ else
 
         _editingRendezVous = _reservations.ToDictionary(
             r => r.Id,
-            r => r.RendezVousDateTime?.ToString("yyyy-MM-ddTHH:mm") ?? string.Empty);
+            r => r.RendezVousDateTime.HasValue
+                ? DateTime.SpecifyKind(r.RendezVousDateTime.Value, DateTimeKind.Utc)
+                          .ToLocalTime()
+                          .ToString("yyyy-MM-ddTHH:mm")
+                : string.Empty);
 
         _moderationThread = await DbContext.Conversations
             .FirstOrDefaultAsync(t => t.AnnonceId == Id && t.IsModeration);

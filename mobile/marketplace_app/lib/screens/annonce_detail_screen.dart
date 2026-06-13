@@ -15,6 +15,8 @@ import '../l10n/app_localizations.dart';
 import '../l10n/category_localizations.dart';
 import '../providers/reservation_provider.dart';
 import 'phone_verification_screen.dart';
+import 'seller_showcase_screen.dart';
+import '../widgets/user_avatar.dart';
 
 class AnnonceDetailScreen extends StatefulWidget {
   final int annonceId;
@@ -597,12 +599,12 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                       const SizedBox(height: AppLayout.spacing12),
                       Row(
                         children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: colors.primaryMuted,
-                            child: Icon(
-                              Icons.person,
-                              color: colors.primary,
+                          GestureDetector(
+                            onTap: () => navigateToSeller(context, annonce.seller.id),
+                            child: UserAvatar(
+                              avatarUrl: annonce.seller.avatarUrl,
+                              name: annonce.seller.name,
+                              radius: 24,
                             ),
                           ),
                           const SizedBox(width: AppLayout.spacing12),
@@ -610,12 +612,25 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  annonce.seller.name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                    color: colors.textPrimary,
+                                GestureDetector(
+                                  onTap: () => navigateToSeller(context, annonce.seller.id),
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          annonce.seller.name,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                            color: colors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (annonce.seller.isVerifiedSeller) ...[
+                                        const SizedBox(width: 4),
+                                        Icon(Icons.verified, size: 16, color: colors.primary),
+                                      ],
+                                    ],
                                   ),
                                 ),
                                 if (hasSellerRating) ...[

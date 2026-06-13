@@ -265,6 +265,7 @@ class _AnnonceConversationsScreenState
             builder: (_) => ChatScreen(
               conversationId: conv.id,
               interlocutorName: conv.interlocutorName,
+              interlocutorId: conv.interlocutorId,
               annonceId: conv.annonceId,
               annonceTitle: conv.annonceTitle,
               annonceImage: conv.annonceImage,

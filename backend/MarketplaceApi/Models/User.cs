@@ -58,13 +58,23 @@ public class User
     // Email and Account Status
     public bool EmailVerified { get; set; } = false;
     
-    [MaxLength(64)]
+    [MaxLength(128)]
     public string? EmailVerificationCode { get; set; }
     
     public DateTime? EmailVerificationExpiry { get; set; }
+
+    public DateTime? VerifiedAt { get; set; }
+
     public bool IsDeleted { get; set; } = false;
     
     // FCM Push Notification Token
     [MaxLength(255)]
     public string? FcmToken { get; set; }
+
+    // Avatar
+    [MaxLength(500)]
+    public string? AvatarUrl { get; set; }
+
+    // Verified seller status (set by admin only)
+    public bool IsVerifiedSeller { get; set; } = false;
 }

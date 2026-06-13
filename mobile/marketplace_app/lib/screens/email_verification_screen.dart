@@ -1,51 +1,71 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import 'login_screen.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
-  const EmailVerificationScreen({super.key});
+  /// Email to verify. If null, reads from AuthProvider.user.
+  final String? email;
+
+  const EmailVerificationScreen({super.key, this.email});
 
   @override
-  State<EmailVerificationScreen> createState() =>
-      _EmailVerificationScreenState();
+  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
 }
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
-  final _codeController = TextEditingController();
-  bool _codeSent = false;
-  bool _isLoading = false;
-  String? _mockCode; // For dev: display the mock code
+  bool _isSending = false;
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
+
+  String get _email =>
+      widget.email ??
+      Provider.of<AuthProvider>(context, listen: false).user?.email ??
+      '';
 
   @override
   void dispose() {
-    _codeController.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _sendCode() async {
-    setState(() => _isLoading = true);
+  void _startCooldown() {
+    _cooldownSeconds = 60;
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _cooldownSeconds--;
+        if (_cooldownSeconds <= 0) timer.cancel();
+      });
+    });
+  }
+
+  Future<void> _resendEmail() async {
+    if (_isSending || _cooldownSeconds > 0) return;
+    setState(() => _isSending = true);
 
     try {
-      final result = await ApiService().sendEmailVerificationCode(
-        Provider.of<AuthProvider>(context, listen: false).user!.email,
-      );
+      await ApiService().resendVerificationEmail(_email);
       if (!mounted) return;
-      setState(() {
-        _codeSent = true;
-        _isLoading = false;
-        _mockCode = result['mockCode']?.toString();
-      });
+      setState(() => _isSending = false);
+      _startCooldown();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Code de vérification envoyé sur votre email !'),
-            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
+          content: const Text('Email de vérification envoyé !'),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() => _isSending = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
@@ -55,185 +75,171 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     }
   }
 
-  Future<void> _verifyCode() async {
-    final code = _codeController.text.trim();
-    if (code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Veuillez entrer le code'),
-            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final user = Provider.of<AuthProvider>(context, listen: false).user!;
-      final updatedUser = await ApiService().verifyEmail(user.email, code);
+  Future<void> _openEmailApp() async {
+    final uri = Uri(scheme: 'mailto');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
       if (!mounted) return;
-
-      // Update auth provider with verified user
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      authProvider.setUser(updatedUser);
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Email vérifié avec succès !'),
-            backgroundColor: Theme.of(context).extension<AppColors>()!.accent,
-        ),
-      );
-      Navigator.pop(context, true); // Return true = verified
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
-        ),
+        const SnackBar(content: Text("Aucune application email trouvée.")),
       );
     }
+  }
+
+  void _backToLogin() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthProvider>(context, listen: false).user;
-    final email = user?.email ?? '';
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Vérification de l\'email')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Icon(
-              Icons.mark_email_unread_outlined,
-              size: 80,
-              color: Theme.of(context).primaryColor,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Vérifiez votre email',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Un code de vérification sera envoyé à votre adresse email.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).extension<AppColors>()!.textSecondary,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
+      appBar: AppBar(
+        title: const Text('Vérification email'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _backToLogin,
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
 
-            // Email display (non-editable)
-            TextFormField(
-              initialValue: email,
-              enabled: false,
-              decoration: InputDecoration(
-                labelText: 'Adresse email',
-                prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              // Icon
+              Icon(
+                Icons.mark_email_unread_outlined,
+                size: 80,
+                color: primaryColor,
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-            if (!_codeSent) ...[
-              SizedBox(
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _sendCode,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              // Title
+              Text(
+                'Vérifiez votre adresse email',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  child: _isLoading
-                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
-                      : const Text('Envoyer le code',
-                          style: TextStyle(fontSize: 16)),
-                ),
-              ),
-            ],
-
-            if (_codeSent) ...[
-              // Mock code display (dev only)
-              if (_mockCode != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).extension<AppColors>()!.warningMuted,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Theme.of(context).extension<AppColors>()!.warning),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Theme.of(context).extension<AppColors>()!.warning),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '[DEV] Code: $_mockCode',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Code input
-              TextFormField(
-                controller: _codeController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: InputDecoration(
-                  labelText: 'Code de vérification',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
 
+              // Description
+              Text(
+                'Nous avons envoyé un email de confirmation à :',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _email,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Cliquez sur le lien reçu pour activer votre compte.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+
+              // Open email app
               SizedBox(
                 height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _verifyCode,
+                child: ElevatedButton.icon(
+                  onPressed: _openEmailApp,
+                  icon: const Icon(Icons.email_outlined),
+                  label: const Text(
+                    'Ouvrir mon application email',
+                    style: TextStyle(fontSize: 15),
+                  ),
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: _isLoading
-                      ? CircularProgressIndicator(color: Theme.of(context).extension<AppColors>()!.textOnPrimary)
-                      : const Text('Vérifier', style: TextStyle(fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 12),
 
+              // Resend button
+              SizedBox(
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: (_isSending || _cooldownSeconds > 0) ? null : _resendEmail,
+                  icon: _isSending
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: primaryColor),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(
+                    _cooldownSeconds > 0
+                        ? 'Renvoyer le lien (${_cooldownSeconds}s)'
+                        : 'Renvoyer le lien',
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Back to login
               TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        setState(() {
-                          _codeSent = false;
-                          _codeController.clear();
-                          _mockCode = null;
-                        });
-                      },
-                child: const Text('Renvoyer le code'),
+                onPressed: _backToLogin,
+                child: const Text('Retour à la connexion'),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Info box
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: primaryColor.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, color: primaryColor, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Vérifiez vos spams si vous ne trouvez pas l\'email dans votre boîte de réception.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

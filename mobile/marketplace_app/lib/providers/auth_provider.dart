@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -10,6 +11,8 @@ class AuthProvider with ChangeNotifier {
   User? _user;
   bool _isLoading = false;
   String? _error;
+  bool _emailVerificationRequired = false;
+  bool _emailNotVerified = false;
 
   User? get user => _user;
   bool get isLoading => _isLoading;
@@ -18,13 +21,14 @@ class AuthProvider with ChangeNotifier {
   bool get isGuest => _user == null;
   bool get isAdmin => _user?.role.toLowerCase() == 'admin';
   String? get token => _apiService.token;
+  bool get emailVerificationRequired => _emailVerificationRequired;
+  bool get emailNotVerified => _emailNotVerified;
 
   void setUser(User user) {
     _user = user;
     notifyListeners();
   }
 
-  // Initialize and check existing auth
   Future<void> init() async {
     _isLoading = true;
     notifyListeners();
@@ -56,7 +60,16 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Register
+  /// Refresh current user profile from the API.
+  Future<void> refreshUser() async {
+    if (_user == null) return;
+    try {
+      _user = await _apiService.getProfile();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  // Register — returns true on success, sets emailVerificationRequired flag
   Future<bool> register({
     required String email,
     required String password,
@@ -67,10 +80,11 @@ class AuthProvider with ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
+    _emailVerificationRequired = false;
     notifyListeners();
 
     try {
-      final authResponse = await _apiService.register(
+      final result = await _apiService.register(
         email: email,
         password: password,
         name: name,
@@ -78,7 +92,8 @@ class AuthProvider with ChangeNotifier {
         wilayaId: wilayaId,
         communeId: communeId,
       );
-      _user = authResponse.user;
+      _user = result.user;
+      _emailVerificationRequired = result.emailVerificationRequired;
       _updateFcmToken();
       _isLoading = false;
       notifyListeners();
@@ -91,13 +106,14 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Login
+  // Login — sets emailNotVerified flag when EMAIL_NOT_VERIFIED error
   Future<bool> login({
     required String email,
     required String password,
   }) async {
     _isLoading = true;
     _error = null;
+    _emailNotVerified = false;
     notifyListeners();
 
     try {
@@ -111,7 +127,13 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      if (msg.startsWith('EMAIL_NOT_VERIFIED:')) {
+        _emailNotVerified = true;
+        _error = msg.substring('EMAIL_NOT_VERIFIED:'.length);
+      } else {
+        _error = msg;
+      }
       _isLoading = false;
       notifyListeners();
       return false;
@@ -153,7 +175,6 @@ class AuthProvider with ChangeNotifier {
 
   // ─── Phone OTP Login ───
 
-  /// Request an OTP code for phone-based login/registration.
   Future<void> requestPhoneOtp(String phone) async {
     _isLoading = true;
     _error = null;
@@ -171,7 +192,6 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Verify phone OTP and log in (or create account).
   Future<bool> verifyPhoneOtp(String phone, String code) async {
     _isLoading = true;
     _error = null;
@@ -251,11 +271,45 @@ class AuthProvider with ChangeNotifier {
     await _apiService.logout();
     await SocialAuthService.signOut();
     _user = null;
+    _emailVerificationRequired = false;
+    _emailNotVerified = false;
     notifyListeners();
+  }
+
+  Future<bool> uploadAvatar(File imageFile) async {
+    try {
+      final avatarUrl = await _apiService.uploadAvatar(imageFile);
+      if (avatarUrl != null && _user != null) {
+        _user = User(
+          id: _user!.id,
+          email: _user!.email,
+          name: _user!.name,
+          phone: _user!.phone,
+          wilayaId: _user!.wilayaId,
+          communeId: _user!.communeId,
+          wilayaName: _user!.wilayaName,
+          communeName: _user!.communeName,
+          role: _user!.role,
+          provider: _user!.provider,
+          providerId: _user!.providerId,
+          phoneVerified: _user!.phoneVerified,
+          emailVerified: _user!.emailVerified,
+          avatarUrl: avatarUrl,
+          isVerifiedSeller: _user!.isVerifiedSeller,
+        );
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
   }
 
   void clearError() {
     _error = null;
+    _emailNotVerified = false;
     notifyListeners();
   }
 }

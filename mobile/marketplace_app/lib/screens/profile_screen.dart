@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
@@ -7,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/user_avatar.dart';
 import 'login_screen.dart';
 import 'admin_categories_screen.dart';
 import 'email_verification_screen.dart';
@@ -217,16 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   children: [
                     // Avatar
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor:
-                          Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      child: Icon(
-                        Icons.person,
-                        size: 50,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    ),
+                    _AvatarUploadWidget(user: user),
                     const SizedBox(height: 16),
 
                     // Email (non-editable)
@@ -560,6 +554,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+class _AvatarUploadWidget extends StatefulWidget {
+  final User user;
+
+  const _AvatarUploadWidget({required this.user});
+
+  @override
+  State<_AvatarUploadWidget> createState() => _AvatarUploadWidgetState();
+}
+
+class _AvatarUploadWidgetState extends State<_AvatarUploadWidget> {
+  bool _uploading = false;
+
+  Future<void> _pickAndUpload() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 800,
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploading = true);
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.uploadAvatar(File(picked.path));
+    if (!mounted) return;
+    setState(() => _uploading = false);
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.error ?? 'Erreur lors du téléchargement'),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user ?? widget.user;
+
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return Stack(
+      alignment: Alignment.bottomRight,
+      children: [
+        _uploading
+            ? const CircleAvatar(
+                radius: 50,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : UserAvatar(
+                avatarUrl: user.avatarUrl,
+                name: user.name,
+                radius: 50,
+              ),
+        GestureDetector(
+          onTap: _uploading ? null : _pickAndUpload,
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: colors.primary,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 2,
+              ),
+            ),
+            child: Icon(
+              Icons.camera_alt,
+              size: 16,
+              color: colors.textOnPrimary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -697,6 +697,72 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Erreur: {error}'**
   String errorWithMessage(String error);
+
+  /// No description provided for @annonces.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annonces'**
+  String get annonces;
+
+  /// No description provided for @avis.
+  ///
+  /// In fr, this message translates to:
+  /// **'Avis'**
+  String get avis;
+
+  /// No description provided for @noAnnoncesYet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune annonce pour l\'instant'**
+  String get noAnnoncesYet;
+
+  /// No description provided for @noReviewsYet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun avis pour l\'instant'**
+  String get noReviewsYet;
+
+  /// No description provided for @reservationMode.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mode réservation'**
+  String get reservationMode;
+
+  /// No description provided for @reservationModeSubtitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Les acheteurs pourront réserver cette annonce'**
+  String get reservationModeSubtitle;
+
+  /// No description provided for @disabledInReservationMode.
+  ///
+  /// In fr, this message translates to:
+  /// **'Désactivé en mode réservation'**
+  String get disabledInReservationMode;
+
+  /// No description provided for @topVerifiedSellers.
+  ///
+  /// In fr, this message translates to:
+  /// **'Top Vendeurs Vérifiés'**
+  String get topVerifiedSellers;
+
+  /// No description provided for @conversationSearchHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rechercher par vendeur, acheteur ou annonce...'**
+  String get conversationSearchHint;
+
+  /// No description provided for @noConversationsFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune conversation trouvée'**
+  String get noConversationsFound;
+
+  /// No description provided for @noConversationsFoundHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Essayez de rechercher par nom de vendeur, d\'acheteur ou par titre d\'annonce.'**
+  String get noConversationsFoundHint;
 }
 
 class _AppLocalizationsDelegate

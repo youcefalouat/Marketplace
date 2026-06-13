@@ -1,6 +1,6 @@
 {
-    "name": "marketplace_app",
-    "short_name": "marketplace_app",
+    "name": "قش بيع Marketplace",
+    "short_name": "قش بيع",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

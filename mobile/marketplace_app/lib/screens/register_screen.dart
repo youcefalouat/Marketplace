@@ -1,13 +1,17 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../services/api_service.dart';
 import '../services/social_auth_service.dart';
 import '../theme/app_colors.dart';
+import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'complete_profile_screen.dart';
 import 'phone_verification_screen.dart';
+import 'legal_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,6 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _acceptedTerms = false;
 
   // Location state
   List<Wilaya> _wilayas = [];
@@ -88,8 +93,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_selectedWilaya == null || _selectedCommune == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Veuillez sélectionner votre wilaya et commune'),
-            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          content: const Text('Veuillez sélectionner votre wilaya et commune'),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+        ),
+      );
+      return;
+    }
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Veuillez accepter les conditions d\'utilisation pour continuer'),
+          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
         ),
       );
       return;
@@ -105,12 +120,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
       communeId: _selectedCommune!.id,
     );
 
-    if (success && mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-    } else if (mounted) {
+    if (!mounted) return;
+
+    if (success) {
+      if (authProvider.emailVerificationRequired) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(
+              email: _emailController.text.trim(),
+            ),
+          ),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.error ?? "Erreur lors de l'inscription"),
@@ -173,9 +201,92 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  void _openLegal(String type) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => LegalScreen(type: type)),
+    );
+  }
+
+  Widget _buildTermsCheckbox(String languageCode) {
+    final isFr = languageCode != 'ar';
+    final linkColor = Theme.of(context).colorScheme.primary;
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final linkStyle = TextStyle(
+      color: linkColor,
+      decoration: TextDecoration.underline,
+      decorationColor: linkColor,
+      fontWeight: FontWeight.w600,
+    );
+
+    final textSpan = isFr
+        ? TextSpan(
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: textColor,
+                ),
+            children: [
+              const TextSpan(text: 'En créant un compte, vous acceptez les '),
+              TextSpan(
+                text: 'Conditions d\'utilisation',
+                style: linkStyle,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => _openLegal('terms'),
+              ),
+              const TextSpan(text: ' et la '),
+              TextSpan(
+                text: 'Politique de confidentialité',
+                style: linkStyle,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => _openLegal('privacy'),
+              ),
+              const TextSpan(text: '.'),
+            ],
+          )
+        : TextSpan(
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: textColor,
+                ),
+            children: [
+              const TextSpan(text: 'بإنشاء حساب، فإنك توافق على '),
+              TextSpan(
+                text: 'شروط الاستخدام',
+                style: linkStyle,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => _openLegal('terms'),
+              ),
+              const TextSpan(text: ' و'),
+              TextSpan(
+                text: 'سياسة الخصوصية',
+                style: linkStyle,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => _openLegal('privacy'),
+              ),
+              const TextSpan(text: '.'),
+            ],
+          );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Checkbox(
+          value: _acceptedTerms,
+          onChanged: (value) => setState(() => _acceptedTerms = value ?? false),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _acceptedTerms = !_acceptedTerms),
+            child: RichText(text: textSpan),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLoading = context.select<AuthProvider, bool>((a) => a.isLoading);
+    final languageCode =
+        context.watch<LocaleProvider>().locale.languageCode;
 
     return Scaffold(
       appBar: AppBar(
@@ -271,7 +382,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Wilaya',
-                          prefixIcon: const Icon(Icons.location_city_outlined),
+                          prefixIcon:
+                              const Icon(Icons.location_city_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -303,7 +415,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Commune',
-                          prefixIcon: const Icon(Icons.location_on_outlined),
+                          prefixIcon:
+                              const Icon(Icons.location_on_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -393,13 +506,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
-                // Register button
+                // Terms & Conditions checkbox
+                _buildTermsCheckbox(languageCode),
+                const SizedBox(height: 24),
+
+                // Register button — disabled if terms not accepted
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: isLoading ? null : _register,
+                    onPressed: (isLoading || !_acceptedTerms) ? null : _register,
                     style: ElevatedButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -410,7 +527,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             width: 24,
                             height: 24,
                             child: CircularProgressIndicator(
-                              color: Theme.of(context).extension<AppColors>()!.textOnPrimary,
+                              color: Theme.of(context)
+                                  .extension<AppColors>()!
+                                  .textOnPrimary,
                               strokeWidth: 2.5,
                             ),
                           )

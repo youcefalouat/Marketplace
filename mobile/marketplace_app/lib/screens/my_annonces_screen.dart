@@ -205,9 +205,9 @@ class _MyAnnoncesScreenState extends State<MyAnnoncesScreen> {
       case 'sold':
         return 'Vendue';
       case 'archived':
-        return 'Archivee';
+        return 'Archivée';
       case 'deleted':
-        return 'Supprimee';
+        return 'Supprimée';
       default:
         return status;
     }
