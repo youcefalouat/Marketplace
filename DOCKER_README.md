@@ -58,6 +58,54 @@ Then recreate the API container:
 docker compose up -d --build marketplace-api
 ```
 
+### Fresh VPS replacement, including database wipe
+
+Use this when you intentionally want to replace the old backend version and start with a clean SQL Server database.
+
+> Warning: `docker compose down -v` deletes the named Docker volume that stores SQL Server data for this Compose project. Do this only after you are sure the old database is no longer needed or has been backed up.
+
+On the VPS, from the project root:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Set strong production values in `.env`, especially:
+
+```bash
+MSSQL_SA_PASSWORD=replace_with_a_strong_sql_password
+JWT_SECRET=replace_with_a_long_random_secret
+RUN_MIGRATIONS_ON_STARTUP=true
+SEED_REFERENCE_DATA_ON_STARTUP=true
+```
+
+If you need an initial admin account on a clean database, set these only for the first deployment:
+
+```bash
+SEED_DEFAULT_ADMIN_ON_STARTUP=true
+DEFAULT_ADMIN_EMAIL=admin@your-domain.com
+DEFAULT_ADMIN_PASSWORD=replace_with_a_strong_admin_password
+```
+
+Then replace the old running containers and database volume:
+
+```bash
+git pull --ff-only
+docker compose down -v
+docker compose up -d --build
+docker compose ps
+docker compose logs -f marketplace-api
+```
+
+After the first successful startup, set `SEED_DEFAULT_ADMIN_ON_STARTUP=false` again and restart the API:
+
+```bash
+docker compose up -d marketplace-api
+```
+
+The startup migration flags in `.env` let the production container create the fresh schema and seed reference data without switching the whole app to Development mode.
+
 ## 2. Mobile App Build Environment
 
 To build the mobile app without installing Flutter/Android SDKs locally, use the provided Dockerfile.

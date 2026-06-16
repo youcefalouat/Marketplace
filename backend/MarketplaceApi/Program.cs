@@ -76,7 +76,12 @@ builder.Services.AddSwaggerGen(c =>
 
 // Configure Entity Framework with SQL Server
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 10,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null)));
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -226,46 +231,71 @@ app.MapHub<MarketplaceApi.Hubs.ChatHub>("/chatHub");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// Apply pending migrations on startup (dev only)
-if (app.Environment.IsDevelopment())
+// Apply optional startup database tasks. Production enables these explicitly via env vars.
+var runMigrationsOnStartup = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup");
+var seedReferenceDataOnStartup = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue("Database:SeedReferenceDataOnStartup", runMigrationsOnStartup);
+var seedDefaultAdminOnStartup = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue<bool>("Database:SeedDefaultAdminOnStartup");
+
+if (runMigrationsOnStartup || seedReferenceDataOnStartup || seedDefaultAdminOnStartup)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
-    
-    // Seed wilayas and communes
-    LocationSeedData.SeedLocations(db);
-    
-    // Seed categories
-    CategorySeedData.SeedCategories(db);
-    
-    // Seed admin user if not exists
-    if (!db.Users.Any(u => u.Role == MarketplaceApi.Models.UserRole.Admin))
+
+    if (runMigrationsOnStartup)
     {
-        // Use Alger (wilaya 16) and Alger Centre (commune 1 of Alger) as default
-        var algerWilaya = db.Wilayas.FirstOrDefault(w => w.Code == "16");
-        var algerCommune = algerWilaya != null
-            ? db.Communes.FirstOrDefault(c => c.WilayaId == algerWilaya.Id)
-            : null;
-        
-        if (algerWilaya != null && algerCommune != null)
+        db.Database.Migrate();
+    }
+
+    if (seedReferenceDataOnStartup)
+    {
+        // Seed wilayas, communes, and categories.
+        LocationSeedData.SeedLocations(db);
+        CategorySeedData.SeedCategories(db);
+    }
+
+    if (seedDefaultAdminOnStartup && !db.Users.Any(u => u.Role == MarketplaceApi.Models.UserRole.Admin))
+    {
+        var adminEmail = app.Configuration["Database:DefaultAdmin:Email"] ?? "admin@marketplace.com";
+        var adminPassword = app.Configuration["Database:DefaultAdmin:Password"];
+        if (app.Environment.IsDevelopment())
         {
-            db.Users.Add(new MarketplaceApi.Models.User
-            {
-                Email = "admin@marketplace.com",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
-                Name = "Administrateur",
-                Phone = "0600000000",
-                WilayaId = algerWilaya.Id,
-                CommuneId = algerCommune.Id,
-                Role = MarketplaceApi.Models.UserRole.Admin,
-                CreatedAt = DateTime.UtcNow
-            });
-            db.SaveChanges();
+            adminPassword ??= "Admin123!";
+        }
+
+        if (string.IsNullOrWhiteSpace(adminPassword))
+        {
+            Console.WriteLine("WARNING: Default admin was not seeded because Database:DefaultAdmin:Password is not configured.");
         }
         else
         {
-            Console.WriteLine("WARNING: Could not seed admin user - Alger wilaya/commune not found.");
+            // Use Alger (wilaya 16) and Alger Centre (commune 1 of Alger) as default.
+            var algerWilaya = db.Wilayas.FirstOrDefault(w => w.Code == "16");
+            var algerCommune = algerWilaya != null
+                ? db.Communes.FirstOrDefault(c => c.WilayaId == algerWilaya.Id)
+                : null;
+
+            if (algerWilaya != null && algerCommune != null)
+            {
+                db.Users.Add(new MarketplaceApi.Models.User
+                {
+                    Email = adminEmail,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                    Name = app.Configuration["Database:DefaultAdmin:Name"] ?? "Administrateur",
+                    Phone = app.Configuration["Database:DefaultAdmin:Phone"] ?? "0600000000",
+                    WilayaId = algerWilaya.Id,
+                    CommuneId = algerCommune.Id,
+                    Role = MarketplaceApi.Models.UserRole.Admin,
+                    CreatedAt = DateTime.UtcNow
+                });
+                db.SaveChanges();
+            }
+            else
+            {
+                Console.WriteLine("WARNING: Could not seed admin user - Alger wilaya/commune not found.");
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ services:
   marketplace-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: marketplace-db
+    restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
@@ -15,11 +16,20 @@ services:
   marketplace-api:
     image: marketplace-api
     container_name: marketplace-api
+    restart: unless-stopped
     build:
       context: ./backend/MarketplaceApi
       dockerfile: Dockerfile
     environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=Server=marketplace-db;Database=${MARKETPLACE_DB_NAME:-MarketplaceDb};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
+      - Database__RunMigrationsOnStartup=${RUN_MIGRATIONS_ON_STARTUP:-true}
+      - Database__SeedReferenceDataOnStartup=${SEED_REFERENCE_DATA_ON_STARTUP:-true}
+      - Database__SeedDefaultAdminOnStartup=${SEED_DEFAULT_ADMIN_ON_STARTUP:-false}
+      - Database__DefaultAdmin__Email=${DEFAULT_ADMIN_EMAIL:-admin@marketplace.com}
+      - Database__DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:-}
+      - Database__DefaultAdmin__Name=${DEFAULT_ADMIN_NAME:-Administrateur}
+      - Database__DefaultAdmin__Phone=${DEFAULT_ADMIN_PHONE:-0600000000}
       - ASPNETCORE_URLS=http://+:8080
       - JwtSettings__SecretKey=${JWT_SECRET}
       - JwtSettings__Issuer=${JWT_ISSUER:-MarketplaceApi}
@@ -29,6 +39,14 @@ services:
       - Twilio__AccountSid=${TWILIO_ACCOUNT_SID:-}
       - Twilio__AuthToken=${TWILIO_AUTH_TOKEN:-}
       - Twilio__VerificationServiceSid=${TWILIO_VERIFICATION_SERVICE_SID:-}
+      - Email__SmtpHost=${EMAIL_SMTP_HOST:-}
+      - Email__SmtpPort=${EMAIL_SMTP_PORT:-587}
+      - Email__UseSsl=${EMAIL_USE_SSL:-true}
+      - Email__SenderEmail=${EMAIL_SENDER_EMAIL:-}
+      - Email__SenderName=${EMAIL_SENDER_NAME:-Marketplace Controlee}
+      - Email__Username=${EMAIL_USERNAME:-}
+      - Email__BaseUrl=${EMAIL_BASE_URL:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
     ports:
       - "${MARKETPLACE_API_PORT:-5000}:8080"
     volumes:
