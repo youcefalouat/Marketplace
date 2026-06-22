@@ -26,35 +26,44 @@ public class ReservationService : IReservationService
 
     public async Task<CreateReservationResponseDto> CreateReservationAsync(int userId, int annonceId)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        try
+        // Validation reads outside the strategy — fail fast before acquiring any lock.
+        var annonce = await _context.Annonces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == annonceId && !a.DeletedAt.HasValue);
+
+        if (annonce == null)
+            throw new InvalidOperationException("Annonce introuvable");
+
+        if (!annonce.ReservationEnabled)
+            throw new InvalidOperationException("Les réservations ne sont pas activées pour cette annonce");
+
+        if (annonce.UserId == userId)
+            throw new InvalidOperationException("Vous ne pouvez pas réserver votre propre annonce");
+
+        var alreadyExists = await _context.Reservations
+            .AsNoTracking()
+            .AnyAsync(r => r.UserId == userId && r.AnnonceId == annonceId);
+
+        if (alreadyExists)
+            throw new InvalidOperationException("Vous avez déjà une réservation pour cette annonce");
+
+        // Rank assignment must be atomic to prevent two concurrent reservations
+        // receiving the same rank, so we keep it inside the transaction.
+        var rank = 0;
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            var annonce = await _context.Annonces
-                .FirstOrDefaultAsync(a => a.Id == annonceId && !a.DeletedAt.HasValue);
-
-            if (annonce == null)
-                throw new InvalidOperationException("Annonce introuvable");
-
-            if (!annonce.ReservationEnabled)
-                throw new InvalidOperationException("Les réservations ne sont pas activées pour cette annonce");
-
-            if (annonce.UserId == userId)
-                throw new InvalidOperationException("Vous ne pouvez pas réserver votre propre annonce");
-
-            var alreadyExists = await _context.Reservations
-                .AnyAsync(r => r.UserId == userId && r.AnnonceId == annonceId);
-
-            if (alreadyExists)
-                throw new InvalidOperationException("Vous avez déjà une réservation pour cette annonce");
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync();
 
             var maxRank = await _context.Reservations
                 .Where(r => r.AnnonceId == annonceId)
                 .Select(r => (int?)r.Rank)
                 .MaxAsync();
 
-            var rank = (maxRank ?? 0) + 1;
+            rank = (maxRank ?? 0) + 1;
 
-            var reservation = new Reservation
+            _context.Reservations.Add(new Reservation
             {
                 AnnonceId = annonceId,
                 UserId = userId,
@@ -62,34 +71,28 @@ public class ReservationService : IReservationService
                 ReservationDateTime = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
-            };
+            });
 
-            _context.Reservations.Add(reservation);
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
+        });
 
-            // Notify seller (fire-and-forget, best effort)
-            _ = _notificationService.SendPushNotificationAsync(
-                annonce.UserId,
-                "Nouvelle réservation",
-                $"Un utilisateur a réservé votre annonce : {annonce.Title}",
-                new Dictionary<string, string>
-                {
-                    { "type", "new_reservation" },
-                    { "annonceId", annonceId.ToString() }
-                });
-
-            return new CreateReservationResponseDto
+        // Notify seller (fire-and-forget, best effort)
+        _ = _notificationService.SendPushNotificationAsync(
+            annonce.UserId,
+            "Nouvelle réservation",
+            $"Un utilisateur a réservé votre annonce : {annonce.Title}",
+            new Dictionary<string, string>
             {
-                Rank = rank,
-                Message = $"Votre réservation a été enregistrée avec succès. Votre rang est : #{rank}"
-            };
-        }
-        catch
+                { "type", "new_reservation" },
+                { "annonceId", annonceId.ToString() }
+            });
+
+        return new CreateReservationResponseDto
         {
-            await transaction.RollbackAsync();
-            throw;
-        }
+            Rank = rank,
+            Message = $"Votre réservation a été enregistrée avec succès. Votre rang est : #{rank}"
+        };
     }
 
     public async Task<List<ReservationDto>> GetReservationsByAnnonceAsync(int annonceId)
@@ -113,9 +116,12 @@ public class ReservationService : IReservationService
 
     public async Task DeleteReservationAsync(int reservationId)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
             var reservation = await _context.Reservations.FindAsync(reservationId);
             if (reservation == null)
                 throw new InvalidOperationException("Réservation introuvable");
@@ -138,12 +144,7 @@ public class ReservationService : IReservationService
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        });
     }
 
     public async Task UpdateRendezVousAsync(int reservationId, DateTime? rendezVous)

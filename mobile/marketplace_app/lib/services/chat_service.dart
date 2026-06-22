@@ -346,7 +346,13 @@ class ChatService {
       );
     }
 
-    throw Exception('Failed to send message: ${response.statusCode}');
+    var errorMessage = 'Échec de l\'envoi du message (${response.statusCode})';
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final msg = body?['message'] as String?;
+      if (msg != null && msg.isNotEmpty) errorMessage = msg;
+    } catch (_) {}
+    throw Exception(errorMessage);
   }
 
   Future<Conversation> startConversation(int annonceId) async {

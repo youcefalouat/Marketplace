@@ -21,7 +21,7 @@ import 'theme/app_colors.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
+  debugPrint("Handling a background message: ${message.messageId}");
 }
 
 void main() async {
@@ -31,7 +31,7 @@ void main() async {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (e) {
-    print('Firebase init failed (likely missing config): $e');
+    debugPrint('Firebase init failed (likely missing config): $e');
   }
   runApp(const MarketplaceApp());
 }

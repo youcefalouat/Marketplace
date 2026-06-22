@@ -4,6 +4,8 @@ description: Application mobile marketplace contrÃ´lÃ©e pour Ã©lectromÃ©
 publish_to: 'none'
 
 version: 1.0.0+1
+# RELEASE NOTE: Bump versionCode (+1) for every Play Store / App Store upload.
+# Example next release: 1.0.1+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

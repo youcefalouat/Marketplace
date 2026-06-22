@@ -255,110 +255,129 @@ public class ChatController : ControllerBase
 
         var content = dto.Content.Trim();
         if (string.IsNullOrWhiteSpace(content))
-        {
             return BadRequest(new { message = "Le message est vide" });
-        }
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-
-        Conversation? conversation = null;
+        // ── Validation reads — AsNoTracking, outside the retry strategy ──────
+        // Keeps the Serializable lock window as short as possible.
         if (id > 0)
         {
-            conversation = await _context.Conversations
-                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+            var conv = await _context.Conversations
+                .AsNoTracking()
+                .Where(c => c.Id == id)
+                .Select(c => new { c.BuyerId, c.SellerId })
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (conversation == null)
-            {
-                return NotFound(new { message = "Conversation introuvable" });
-            }
+            if (conv == null) return NotFound(new { message = "Conversation introuvable" });
+            if (conv.BuyerId != userId.Value && conv.SellerId != userId.Value) return Forbid();
         }
-
-        if (conversation == null && !dto.AnnonceId.HasValue)
+        else
         {
-            return BadRequest(new { message = "annonceId est requis pour creer une conversation" });
-        }
+            if (!dto.AnnonceId.HasValue)
+                return BadRequest(new { message = "annonceId est requis pour creer une conversation" });
 
-        if (conversation == null)
-        {
             var annonce = await _context.Annonces
                 .AsNoTracking()
-                .Where(a => a.Id == dto.AnnonceId!.Value)
+                .Where(a => a.Id == dto.AnnonceId.Value)
                 .Select(a => new { a.Id, a.UserId })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (annonce == null)
-            {
-                return NotFound(new { message = "Annonce non trouvee" });
-            }
-
+            if (annonce == null) return NotFound(new { message = "Annonce non trouvee" });
             if (annonce.UserId == userId.Value)
-            {
                 return BadRequest(new { message = "Vous ne pouvez pas demarrer une conversation sur votre propre annonce" });
-            }
+        }
 
-            conversation = await _context.Conversations
-                .FirstOrDefaultAsync(
-                    c => c.AnnonceId == annonce.Id && c.BuyerId == userId.Value && !c.IsModeration,
-                    cancellationToken);
+        // ── Transactional writes — wrapped in the execution strategy ─────────
+        // SqlServerRetryingExecutionStrategy (configured via EnableRetryOnFailure)
+        // forbids direct BeginTransactionAsync calls. The strategy must own the
+        // retry loop so it can restart the entire transaction on a transient fault.
+        Message? savedMessage = null;
+        Conversation? savedConversation = null;
 
-            if (conversation == null)
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            // Clear tracker so that a retry starts from a clean state and does
+            // not re-insert partially-tracked entities from the previous attempt.
+            _context.ChangeTracker.Clear();
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+
+            Conversation? conversation = null;
+
+            if (id > 0)
             {
-                conversation = new Conversation
-                {
-                    AnnonceId = annonce.Id,
-                    BuyerId = userId.Value,
-                    SellerId = annonce.UserId,
-                    StartedAt = DateTime.UtcNow,
-                    LastMessageAt = DateTime.UtcNow,
-                    IsModeration = false
-                };
-
-                _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync(cancellationToken);
+                conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
             }
-        }
+            else
+            {
+                var annonce = await _context.Annonces
+                    .AsNoTracking()
+                    .Where(a => a.Id == dto.AnnonceId!.Value)
+                    .Select(a => new { a.Id, a.UserId })
+                    .FirstOrDefaultAsync(cancellationToken);
 
-        if (conversation.BuyerId != userId.Value && conversation.SellerId != userId.Value)
-        {
-            return Forbid();
-        }
+                conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(
+                        c => c.AnnonceId == annonce!.Id && c.BuyerId == userId.Value && !c.IsModeration,
+                        cancellationToken);
 
-        var receiverId = conversation.BuyerId == userId.Value
-            ? conversation.SellerId
-            : conversation.BuyerId;
+                if (conversation == null)
+                {
+                    conversation = new Conversation
+                    {
+                        AnnonceId = annonce!.Id,
+                        BuyerId = userId.Value,
+                        SellerId = annonce.UserId,
+                        StartedAt = DateTime.UtcNow,
+                        LastMessageAt = DateTime.UtcNow,
+                        IsModeration = false
+                    };
+                    _context.Conversations.Add(conversation);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
 
-        var now = DateTime.UtcNow;
-        var message = new Message
-        {
-            ConversationId = conversation.Id,
-            SenderId = userId.Value,
-            ReceiverId = receiverId,
-            Content = content,
-            SentAt = now,
-            IsRead = false,
-            ReadAt = null
-        };
+            var receiverId = conversation!.BuyerId == userId.Value
+                ? conversation.SellerId
+                : conversation.BuyerId;
 
-        _context.Messages.Add(message);
-        conversation.LastMessageAt = now;
+            var now = DateTime.UtcNow;
+            var msg = new Message
+            {
+                ConversationId = conversation.Id,
+                SenderId = userId.Value,
+                ReceiverId = receiverId,
+                Content = content,
+                SentAt = now,
+                IsRead = false,
+                ReadAt = null
+            };
 
-        await _context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+            _context.Messages.Add(msg);
+            conversation.LastMessageAt = now;
 
-        var senderMessageDto = MapMessageDto(message, userId.Value, dto.ClientMessageId);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            savedMessage = msg;
+            savedConversation = conversation;
+        });
+
+        // ── Post-transaction side-effects (SignalR + push notifications) ──────
+        var senderMessageDto = MapMessageDto(savedMessage!, userId.Value, dto.ClientMessageId);
 
         await PushMessageAndConversationUpdatesAsync(
-            conversation,
-            message,
+            savedConversation!,
+            savedMessage!,
             dto.ClientMessageId,
             cancellationToken);
 
         var senderName = User.FindFirst(ClaimTypes.Name)?.Value ?? "Un utilisateur";
         await _notificationService.SendMessageNotificationAsync(
-            receiverId,
-            MapMessageDto(message, receiverId, dto.ClientMessageId),
+            savedMessage!.ReceiverId,
+            MapMessageDto(savedMessage, savedMessage.ReceiverId, dto.ClientMessageId),
             senderName,
             cancellationToken);
 

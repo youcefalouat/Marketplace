@@ -36,7 +36,9 @@ public class TwilioSmsService : ISmsService
         {
             TwilioClient.Init(_settings.AccountSid, _settings.AuthToken);
             _isConfigured = true;
-            _logger.LogInformation("Twilio SMS service initialized successfully with ServiceSid={ServiceSid}",
+            _logger.LogInformation(
+                "Twilio SMS service initialized. AccountSid={AccountSid}, ServiceSid={ServiceSid}",
+                _settings.AccountSid[..Math.Min(8, _settings.AccountSid.Length)] + "...",
                 _settings.VerificationServiceSid[..Math.Min(8, _settings.VerificationServiceSid.Length)] + "...");
         }
     }

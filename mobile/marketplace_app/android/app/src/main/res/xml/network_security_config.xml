@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration
+  ================================
+  This file replaces the blanket android:usesCleartextTraffic="true" flag with
+  a scoped rule that only permits cleartext (HTTP) to the current backend IP.
+
+  BEFORE PRODUCTION RELEASE:
+  - Move your API server to HTTPS and remove the <domain-config> block below.
+  - Once HTTPS is in place, delete the entire <domain-config> element.
+    The default config already blocks cleartext for all other domains.
+-->
+<network-security-config>
+    <!-- Default: trust system CAs, block cleartext everywhere except listed below. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!--
+      TEMPORARY: allow HTTP only to the current backend IP.
+      Remove this block once the backend is behind HTTPS.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">109.199.126.188</domain>
+    </domain-config>
+</network-security-config>

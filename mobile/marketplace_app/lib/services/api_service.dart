@@ -66,7 +66,6 @@ class ApiService {
     final token = await getToken();
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -788,7 +787,6 @@ class ApiService {
       );
 
       request.headers['Authorization'] = 'Bearer $token';
-      request.headers['ngrok-skip-browser-warning'] = 'true';
 
       request.fields['categoryId'] = categoryId.toString();
       if (parentCategoryId != null) {
