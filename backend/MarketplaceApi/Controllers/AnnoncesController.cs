@@ -239,7 +239,13 @@ public class AnnoncesController : ControllerBase
         {
             return StatusCode(403, new { message = "Veuillez vérifier votre numéro de téléphone avant de publier une annonce", requiresPhoneVerification = true });
         }
-        
+
+        // Only verified sellers may enable reservation mode
+        if (dto.ReservationEnabled && !user.IsVerifiedSeller)
+        {
+            return StatusCode(403, new { message = "Seuls les utilisateurs vérifiés peuvent utiliser le mode réservation." });
+        }
+
         // Validate images count
         if (images != null && images.Count > 5)
         {

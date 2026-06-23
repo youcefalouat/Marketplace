@@ -276,9 +276,10 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     bool isSubmitting = false;
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (ctx, setState) {
+          builder: (ctx, setDialogState) {
             return AlertDialog(
               title: const Text('Confirmer votre réservation'),
               content: const Text(
@@ -292,33 +293,53 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          setState(() => isSubmitting = true);
-                          try {
-                            final reservationProvider =
-                                Provider.of<ReservationProvider>(context,
-                                    listen: false);
-                            final result = await reservationProvider
-                                .createReservation(annonce.id);
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (result != null && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Réservation enregistrée avec succès ! Votre rang est : #${result.rank}'),
-                                  duration: const Duration(seconds: 4),
+                          setDialogState(() => isSubmitting = true);
+                          final reservationProvider =
+                              Provider.of<ReservationProvider>(context,
+                                  listen: false);
+                          final result = await reservationProvider
+                              .createReservation(annonce.id);
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+
+                          if (result != null && mounted) {
+                            await showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (successCtx) => AlertDialog(
+                                title:
+                                    const Text('Réservation enregistrée'),
+                                content: Text(
+                                  'Votre réservation a été enregistrée avec succès.\n\nVotre rang est : #${result.rank}',
                                 ),
-                              );
-                            }
-                          } catch (e) {
-                            setState(() => isSubmitting = false);
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(
-                                    content: Text(e
-                                        .toString()
-                                        .replaceAll('Exception: ', ''))),
-                              );
-                            }
+                                actions: [
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(successCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else if (mounted) {
+                            final errorMessage =
+                                reservationProvider.error ??
+                                    'Une erreur est survenue lors de la réservation.\nVeuillez réessayer plus tard.';
+                            await showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (errorCtx) => AlertDialog(
+                                title: const Text('Erreur'),
+                                content: Text(errorMessage),
+                                actions: [
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(errorCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
                           }
                         },
                   child: isSubmitting

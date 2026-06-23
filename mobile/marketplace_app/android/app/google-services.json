@@ -41,6 +41,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:269847662498:android:d44d13269f4ff545412cfb",
+        "android_client_info": {
+          "package_name": "com.youcef.cashbuy"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdmdtcJBNLWBcO9p3UbJ6BdgvEhl3RFdc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

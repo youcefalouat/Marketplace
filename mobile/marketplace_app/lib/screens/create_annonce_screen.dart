@@ -328,6 +328,8 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final states = [l10n.newCondition, l10n.usedCondition];
+    final isVerifiedSeller =
+        Provider.of<AuthProvider>(context, listen: false).user?.isVerifiedSeller == true;
 
     return Scaffold(
       appBar: AppBar(
@@ -469,23 +471,25 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Reservation mode toggle
-            SwitchListTile(
-              title: Text(l10n.reservationMode),
-              subtitle: Text(l10n.reservationModeSubtitle),
-              value: _reservationEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _reservationEnabled = value;
-                  if (value) {
-                    _isExchange = false;
-                    _showPhone = false;
-                  }
-                });
-              },
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            ),
-            const SizedBox(height: 8),
+            // Reservation mode toggle — only visible to verified sellers
+            if (isVerifiedSeller) ...[
+              SwitchListTile(
+                title: Text(l10n.reservationMode),
+                subtitle: Text(l10n.reservationModeSubtitle),
+                value: _reservationEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _reservationEnabled = value;
+                    if (value) {
+                      _isExchange = false;
+                      _showPhone = false;
+                    }
+                  });
+                },
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // IsExchange toggle
             SwitchListTile(
