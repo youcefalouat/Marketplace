@@ -97,6 +97,7 @@ public class AdminUsersController : ControllerBase
             return NotFound(new { message = "Utilisateur introuvable" });
 
         user.IsVerifiedSeller = dto.IsVerifiedSeller;
+        user.VerifiedAt = dto.IsVerifiedSeller ? DateTime.UtcNow : null;
         await _context.SaveChangesAsync();
 
         return Ok(new { message = dto.IsVerifiedSeller ? "Vendeur vérifié" : "Vérification retirée", isVerifiedSeller = user.IsVerifiedSeller });

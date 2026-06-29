@@ -1,4 +1,5 @@
 @page "/admin/users"
+@rendermode InteractiveServer
 @using MarketplaceApi.Data
 @using MarketplaceApi.Models
 @using Microsoft.EntityFrameworkCore
@@ -37,6 +38,7 @@ else
                             <th>Téléphone</th>
                             <th class="text-center">Email Vérif.</th>
                             <th class="text-center">Tél Vérif.</th>
+                            <th class="text-center">Vendeur Vérif.</th>
                             <th>Rôle</th>
                             <th>Statut</th>
                             <th>Date d'inscription</th>
@@ -73,6 +75,13 @@ else
                                             @onclick="() => TogglePhoneVerification(user)"
                                             title="Basculer la vérification">
                                         <i class="bi @(user.PhoneVerified ? "bi-check-circle" : "bi-x-circle")"></i>
+                                    </button>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm @(user.IsVerifiedSeller ? "btn-success" : "btn-outline-secondary")"
+                                            @onclick="() => ToggleVerifiedSeller(user)"
+                                            title="@(user.VerifiedAt.HasValue ? $"Vérifié le {user.VerifiedAt.Value:dd/MM/yyyy}" : "Basculer la vérification")">
+                                        <i class="bi @(user.IsVerifiedSeller ? "bi-check-circle" : "bi-x-circle")"></i>
                                     </button>
                                 </td>
                                 <td>
@@ -144,6 +153,15 @@ else
     private async Task TogglePhoneVerification(User user)
     {
         user.PhoneVerified = !user.PhoneVerified;
+        DbContext.Users.Update(user);
+        await DbContext.SaveChangesAsync();
+        await LoadUsers(); // Refresh
+    }
+
+    private async Task ToggleVerifiedSeller(User user)
+    {
+        user.IsVerifiedSeller = !user.IsVerifiedSeller;
+        user.VerifiedAt = user.IsVerifiedSeller ? DateTime.UtcNow : null;
         DbContext.Users.Update(user);
         await DbContext.SaveChangesAsync();
         await LoadUsers(); // Refresh
