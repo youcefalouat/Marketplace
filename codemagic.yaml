@@ -1,0 +1,43 @@
+workflows:
+  ios-workflow:
+    name: iOS Workflow
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic Flutter Build
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.youcef.marketplaceApp
+    scripts:
+      - name: Set up code signing settings on Xcode project
+        script: |
+          cd mobile/marketplace_app
+          xcode-project use-profiles
+      - name: Get Flutter packages
+        script: |
+          cd mobile/marketplace_app
+          flutter packages pub get
+      - name: Flutter build ipa
+        script: |
+          cd mobile/marketplace_app
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - mobile/marketplace_app/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
