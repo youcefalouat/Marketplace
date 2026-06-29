@@ -22,22 +22,26 @@ public class ChatController : ControllerBase
     private const string DefaultCurrency = "DA";
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 100;
+    private static readonly TimeSpan HubSideEffectTimeout = TimeSpan.FromSeconds(3);
 
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly INotificationService _notificationService;
     private readonly ChatConnectionManager _connectionManager;
+    private readonly ILogger<ChatController> _logger;
 
     public ChatController(
         ApplicationDbContext context,
         IHubContext<ChatHub> hubContext,
         INotificationService notificationService,
-        ChatConnectionManager connectionManager)
+        ChatConnectionManager connectionManager,
+        ILogger<ChatController> logger)
     {
         _context = context;
         _hubContext = hubContext;
         _notificationService = notificationService;
         _connectionManager = connectionManager;
+        _logger = logger;
     }
 
     [HttpGet("conversations")]
@@ -485,6 +489,7 @@ public class ChatController : ControllerBase
 
         var messageIds = unreadMessages.Select(m => m.Id).ToList();
         var otherParticipantId = participant.OtherParticipant(userId);
+        var summary = await BuildUnreadSummaryAsync(userId, cancellationToken);
 
         if (messageIds.Count > 0)
         {
@@ -496,18 +501,46 @@ public class ChatController : ControllerBase
                 MessageIds = messageIds
             };
 
-            await _hubContext.Clients.Group(ChatHub.GetUserGroupName(userId))
-                .SendAsync("MessagesRead", receipt, cancellationToken);
-            await _hubContext.Clients.Group(ChatHub.GetUserGroupName(otherParticipantId))
-                .SendAsync("MessagesRead", receipt, cancellationToken);
+            var currentUserConversation =
+                await BuildConversationDtoAsync(participant.Id, userId, cancellationToken);
+            var otherParticipantConversation =
+                await BuildConversationDtoAsync(participant.Id, otherParticipantId, cancellationToken);
 
-            await PushConversationUpdatedAsync(participant.Id, userId, cancellationToken);
-            await PushConversationUpdatedAsync(participant.Id, otherParticipantId, cancellationToken);
+            QueueHubSend(
+                ChatHub.GetUserGroupName(userId),
+                "MessagesRead",
+                receipt,
+                participant.Id);
+            QueueHubSend(
+                ChatHub.GetUserGroupName(otherParticipantId),
+                "MessagesRead",
+                receipt,
+                participant.Id);
+
+            if (currentUserConversation != null)
+            {
+                QueueHubSend(
+                    ChatHub.GetUserGroupName(userId),
+                    "ConversationUpdated",
+                    currentUserConversation,
+                    participant.Id);
+            }
+
+            if (otherParticipantConversation != null)
+            {
+                QueueHubSend(
+                    ChatHub.GetUserGroupName(otherParticipantId),
+                    "ConversationUpdated",
+                    otherParticipantConversation,
+                    participant.Id);
+            }
         }
 
-        var summary = await BuildUnreadSummaryAsync(userId, cancellationToken);
-        await _hubContext.Clients.Group(ChatHub.GetUserGroupName(userId))
-            .SendAsync("UnreadCountUpdated", summary, cancellationToken);
+        QueueHubSend(
+            ChatHub.GetUserGroupName(userId),
+            "UnreadCountUpdated",
+            summary,
+            participant.Id);
 
         return new ConversationReadResultDto
         {
@@ -543,14 +576,67 @@ public class ChatController : ControllerBase
         int userId,
         CancellationToken cancellationToken)
     {
+        var conversation = await BuildConversationDtoAsync(conversationId, userId, cancellationToken);
+        if (conversation == null) return;
+
+        await _hubContext.Clients.Group(ChatHub.GetUserGroupName(userId))
+            .SendAsync("ConversationUpdated", conversation, cancellationToken);
+    }
+
+    private async Task<ConversationDto?> BuildConversationDtoAsync(
+        int conversationId,
+        int userId,
+        CancellationToken cancellationToken)
+    {
         var conversation = await BuildConversationDtoQuery(userId)
             .FirstOrDefaultAsync(c => c.Id == conversationId, cancellationToken);
 
-        if (conversation == null) return;
+        if (conversation != null)
+        {
+            ApplyOnlineFlags(conversation);
+        }
 
-        ApplyOnlineFlags(conversation);
-        await _hubContext.Clients.Group(ChatHub.GetUserGroupName(userId))
-            .SendAsync("ConversationUpdated", conversation, cancellationToken);
+        return conversation;
+    }
+
+    private void QueueHubSend(
+        string groupName,
+        string methodName,
+        object payload,
+        int conversationId)
+    {
+        _ = SendHubUpdateSafelyAsync(groupName, methodName, payload, conversationId);
+    }
+
+    private async Task SendHubUpdateSafelyAsync(
+        string groupName,
+        string methodName,
+        object payload,
+        int conversationId)
+    {
+        using var timeout = new CancellationTokenSource(HubSideEffectTimeout);
+
+        try
+        {
+            await _hubContext.Clients.Group(groupName)
+                .SendAsync(methodName, payload, timeout.Token);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Timed out sending chat hub update {MethodName} for conversation {ConversationId}",
+                methodName,
+                conversationId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to send chat hub update {MethodName} for conversation {ConversationId}",
+                methodName,
+                conversationId);
+        }
     }
 
     private async Task PushUnreadSummaryAsync(int userId, CancellationToken cancellationToken)
