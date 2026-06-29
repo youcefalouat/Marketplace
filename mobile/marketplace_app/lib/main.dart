@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'services/api_service.dart';
+
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config/app_config.dart';
@@ -43,13 +45,39 @@ class MarketplaceApp extends StatefulWidget {
   State<MarketplaceApp> createState() => _MarketplaceAppState();
 }
 
-class _MarketplaceAppState extends State<MarketplaceApp> {
+class _MarketplaceAppState extends State<MarketplaceApp>
+    with WidgetsBindingObserver {
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Doze mode kills TCP sockets while the app is backgrounded.
+      // Flush the HTTP connection pool so the first post-resume request
+      // always opens a fresh connection instead of hanging on a dead socket.
+      ApiService().flushHttpClient();
+    }
+
+    // Only "resumed" counts as actually visible to the user — inactive,
+    // paused, hidden and detached should never auto-mark messages as read.
+    final ctx = _navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      Provider.of<ChatProvider>(ctx, listen: false)
+          .setForeground(state == AppLifecycleState.resumed);
+    }
   }
 
   Future<void> _initDeepLinks() async {

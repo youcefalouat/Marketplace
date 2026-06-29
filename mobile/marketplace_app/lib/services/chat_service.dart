@@ -135,7 +135,9 @@ class ChatService {
     if (conversationId <= 0) return;
 
     _joinedConversationIds.add(conversationId);
-    await _ensureConnected();
+    // Only invoke immediately when already connected; _rejoinConversations()
+    // handles the join once the hub reconnects.
+    if (_hubConnection?.state != HubConnectionState.Connected) return;
     await _hubConnection?.invoke('JoinConversation', args: [conversationId]);
   }
 

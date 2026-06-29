@@ -172,8 +172,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   56 +
                   AppLayout.spacing12, // align under content
               endIndent: 0,
-              color:
-                  Theme.of(context).extension<AppColors>()!.borderSubtle,
+              color: Theme.of(context).extension<AppColors>()!.borderSubtle,
             ),
             itemBuilder: (context, index) {
               if (index >= conversations.length) {
@@ -187,9 +186,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               return _ConversationTile(
                 conversation: conversation,
                 onTap: () {
-                  if (conversation.unreadCount > 0) {
-                    chatProvider.markConversationRead(conversation.id);
-                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -202,7 +198,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         annonceImage: conversation.annonceImage,
                         annoncePrice: conversation.annoncePrice,
                         annonceCategoryName: conversation.annonceCategoryName,
-                        annonceCategoryArName: conversation.annonceCategoryArName,
+                        annonceCategoryArName:
+                            conversation.annonceCategoryArName,
                         annonceStatus: conversation.annonceStatus,
                       ),
                     ),
@@ -259,18 +256,15 @@ class _ConversationTile extends StatelessWidget {
     );
     final priceText =
         l10n.price((conversation.annoncePrice as double).toStringAsFixed(0));
-    final metaLine = [priceText, categoryLabel]
-        .where((s) => s.isNotEmpty)
-        .join(' • ');
+    final metaLine =
+        [priceText, categoryLabel].where((s) => s.isNotEmpty).join(' • ');
 
     final lastMsg = (conversation.lastMessageContent as String).isNotEmpty
         ? conversation.lastMessageContent as String
         : l10n.startConversation;
 
     return Material(
-      color: hasUnread
-          ? colors.surfaceHighlight
-          : Colors.transparent,
+      color: hasUnread ? colors.surfaceHighlight : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -318,9 +312,8 @@ class _ConversationTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: hasUnread
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
+                              fontWeight:
+                                  hasUnread ? FontWeight.w700 : FontWeight.w600,
                               color: colors.textPrimary,
                             ),
                           ),
@@ -334,9 +327,8 @@ class _ConversationTile extends StatelessWidget {
                             color: hasUnread
                                 ? colors.primary
                                 : colors.textTertiary,
-                            fontWeight: hasUnread
-                                ? FontWeight.w600
-                                : FontWeight.normal,
+                            fontWeight:
+                                hasUnread ? FontWeight.w600 : FontWeight.normal,
                           ),
                         ),
                       ],

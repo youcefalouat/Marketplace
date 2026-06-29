@@ -3,16 +3,20 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
+import '../services/api_service.dart';
 import '../services/chat_service.dart';
 
 class ChatProvider with ChangeNotifier {
   final ChatService _chatService = ChatService();
   final Set<int> _markingReadConversationIds = <int>{};
+  static const Duration _chatRequestTimeout = Duration(seconds: 12);
 
   List<Conversation> _conversations = [];
   List<ChatMessage> _currentMessages = [];
   Map<int, int> _conversationUnreadCounts = {};
   bool _isLoading = false;
+  bool _isLoadingMessages = false;
+  int _messageLoadGeneration = 0;
   String? _error;
   String? _connectedToken;
   int? _currentUserId;
@@ -20,6 +24,7 @@ class ChatProvider with ChangeNotifier {
   int _totalUnreadCount = 0;
   ChatRealtimeConnectionStatus _connectionStatus =
       ChatRealtimeConnectionStatus.disconnected;
+  bool _isForeground = true;
 
   // Conversation list pagination
   int _conversationsPage = 1;
@@ -32,6 +37,7 @@ class ChatProvider with ChangeNotifier {
   List<Conversation> get conversations => _conversations;
   List<ChatMessage> get currentMessages => _currentMessages;
   bool get isLoading => _isLoading;
+  bool get isLoadingMessages => _isLoadingMessages;
   String? get error => _error;
   int? get currentConversationId => _currentConversationId;
   int get totalUnreadCount => _totalUnreadCount;
@@ -105,6 +111,9 @@ class ChatProvider with ChangeNotifier {
     _currentMessages = [];
     _conversations = [];
     _conversationUnreadCounts = {};
+    _isLoading = false;
+    _isLoadingMessages = false;
+    _messageLoadGeneration++;
     _totalUnreadCount = 0;
     _error = null;
     _connectionStatus = ChatRealtimeConnectionStatus.disconnected;
@@ -137,11 +146,35 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called from the app's lifecycle observer. A conversation is only
+  /// considered "actively viewed" — and therefore safe to auto-mark-read —
+  /// when the app is actually in the foreground. A backgrounded app still
+  /// has its ChatScreen mounted (Flutter doesn't dispose paused routes),
+  /// so without this gate, messages received while the app sits in the
+  /// background would be marked read before the user ever sees them.
+  void setForeground(bool value) {
+    if (_isForeground == value) return;
+    _isForeground = value;
+
+    if (value) {
+      final currentId = _currentConversationId;
+      if (currentId != null && currentId > 0) {
+        unawaited(markConversationRead(currentId));
+      }
+    }
+  }
+
+  /// Whether [conversationId] is the one currently open on screen — i.e.
+  /// safe to treat its incoming messages as already seen by the user.
+  bool _isActivelyViewing(int conversationId) =>
+      _isForeground && _currentConversationId == conversationId;
+
   void _handleIncomingMessage(ChatMessage message) {
-    final wasInsertedInCurrent = _insertOrReplaceCurrentMessage(message);
-    final isCurrentConversation =
-        _currentConversationId == message.conversationId ||
-            wasInsertedInCurrent;
+    // Still insert into the loaded list (if applicable) so the message is
+    // visible immediately once the user looks at the screen again — this is
+    // independent of whether it should be auto-marked as read right now.
+    _insertOrReplaceCurrentMessage(message);
+    final isCurrentConversation = _isActivelyViewing(message.conversationId);
 
     _touchConversationWithMessage(message);
 
@@ -194,8 +227,8 @@ class ChatProvider with ChangeNotifier {
   }
 
   void _handleConversationUpdated(Conversation conversation) {
-    final shouldRead = _currentConversationId == conversation.id &&
-        conversation.unreadCount > 0;
+    final shouldRead =
+        _isActivelyViewing(conversation.id) && conversation.unreadCount > 0;
     final effectiveConversation = shouldRead
         ? conversation.copyWith(unreadCount: 0, hasUnreadMessages: false)
         : conversation;
@@ -338,31 +371,56 @@ class ChatProvider with ChangeNotifier {
     int conversationId, {
     bool showLoader = true,
   }) async {
+    final loadGeneration =
+        showLoader ? ++_messageLoadGeneration : _messageLoadGeneration;
     if (showLoader) {
-      _isLoading = true;
+      _isLoadingMessages = true;
       _error = null;
+      _currentMessages = [];
     }
     _currentConversationId = conversationId;
-    _currentMessages = [];
     notifyListeners();
 
     if (conversationId <= 0) {
-      _isLoading = false;
+      _isLoadingMessages = false;
       notifyListeners();
       return;
     }
 
     try {
-      await _chatService.joinConversation(conversationId);
-      _currentMessages = await _chatService.getMessages(conversationId);
+      if (showLoader) {
+        // Don't rely on the app-lifecycle observer alone to flush stale
+        // sockets — some OEM battery managers delay or skip lifecycle
+        // callbacks. Opening a chat is the exact moment a hang is visible
+        // to the user, so always start it with a guaranteed-fresh connection.
+        ApiService().flushHttpClient();
+      }
+      // Don't block HTTP message loading on SignalR — join fires in background
+      // and _rejoinConversations() will retry if the hub isn't ready yet.
+      unawaited(_chatService.joinConversation(conversationId));
+      final messages = await _chatService
+          .getMessages(conversationId)
+          .timeout(_chatRequestTimeout);
+      if (loadGeneration != _messageLoadGeneration ||
+          _currentConversationId != conversationId) {
+        return;
+      }
+      _currentMessages = messages;
       _sortCurrentMessages();
       _markConversationReadLocally(conversationId);
       unawaited(markConversationRead(conversationId));
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      if (loadGeneration != _messageLoadGeneration ||
+          _currentConversationId != conversationId) {
+        return;
+      }
+      _error = e is TimeoutException
+          ? 'Connexion lente. Vérifiez votre réseau et réessayez.'
+          : e.toString().replaceFirst('Exception: ', '');
     } finally {
-      if (showLoader) {
-        _isLoading = false;
+      if (loadGeneration == _messageLoadGeneration &&
+          _currentConversationId == conversationId) {
+        _isLoadingMessages = false;
       }
       notifyListeners();
     }
@@ -453,13 +511,18 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final conversation = await _chatService.startConversation(annonceId);
+      ApiService().flushHttpClient();
+      final conversation = await _chatService
+          .startConversation(annonceId)
+          .timeout(_chatRequestTimeout);
       if (!conversation.isPending) {
         _upsertConversation(conversation);
       }
       return conversation;
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      _error = e is TimeoutException
+          ? 'Connexion lente. Vérifiez votre réseau et réessayez.'
+          : e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
       return null;
     } finally {
@@ -473,10 +536,19 @@ class ChatProvider with ChangeNotifier {
       unawaited(_chatService.leaveConversation(conversationId));
     }
 
-    if (_currentConversationId == conversationId) {
-      _currentConversationId = null;
+    // Multiple ChatScreens can be stacked in the navigator at once (e.g.
+    // "Contacter" pushes a new screen without popping the previous one).
+    // Only the screen that owns the *currently active* conversation is
+    // allowed to clear shared state on dispose — otherwise closing an old,
+    // already-superseded screen would wipe out messages/loading state for
+    // whichever conversation is actually on screen now.
+    if (_currentConversationId != conversationId) {
+      return;
     }
 
+    _currentConversationId = null;
+    _messageLoadGeneration++;
+    _isLoadingMessages = false;
     _currentMessages = [];
     notifyListeners();
   }

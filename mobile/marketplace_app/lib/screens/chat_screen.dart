@@ -54,7 +54,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _conversationId = widget.conversationId;
     _chatProvider = Provider.of<ChatProvider>(context, listen: false);
     _chatProvider.addListener(_handleChatUpdates);
-    _chatProvider.loadMessages(_conversationId);
+    // Defer past the current build phase. loadMessages() calls
+    // notifyListeners() synchronously before its first await; doing that
+    // while this very screen is still being mounted (i.e. during the
+    // framework's build phase) can leave the Consumer's dirty-marking in a
+    // broken state on release builds, where the framework's debug-only
+    // safety assertions for this exact misuse are compiled out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _chatProvider.loadMessages(_conversationId);
+    });
   }
 
   @override
@@ -69,11 +77,27 @@ class _ChatScreenState extends State<ChatScreen> {
   void _handleChatUpdates() {
     if (!mounted) return;
 
+    // Multiple ChatScreens can be mounted at once (e.g. "Contacter" pushes a
+    // new screen without popping the previous one), and they all listen to
+    // this same provider. Only adopt the provider's conversation id while
+    // this screen is still a pending/unsaved chat (id <= 0) — that's the
+    // one legitimate case (a brand-new conversation getting its real id
+    // assigned after the first message). A screen that already has a real
+    // id must never be overwritten by a different screen's activity.
     final providerConversationId = _chatProvider.currentConversationId;
     if (providerConversationId != null &&
         providerConversationId > 0 &&
-        providerConversationId != _conversationId) {
+        _conversationId <= 0) {
       setState(() => _conversationId = providerConversationId);
+    } else if (_conversationId > 0 &&
+        providerConversationId != _conversationId &&
+        (ModalRoute.of(context)?.isCurrent ?? false)) {
+      // The shared provider has drifted to a different conversation (another
+      // stacked ChatScreen took it over) while this screen is the one the
+      // user is actually looking at again — reclaim it by reloading our own
+      // conversation instead of silently showing someone else's messages.
+      _chatProvider.loadMessages(_conversationId);
+      return;
     }
 
     final messageCount = _chatProvider.currentMessages.length;
@@ -191,7 +215,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 Flexible(
                   child: GestureDetector(
                     onTap: widget.interlocutorId != null
-                        ? () => navigateToSeller(context, widget.interlocutorId!)
+                        ? () =>
+                            navigateToSeller(context, widget.interlocutorId!)
                         : null,
                     child: Text(
                       widget.interlocutorName,
@@ -203,8 +228,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 Builder(
                   builder: (context) {
-                    final colors =
-                        Theme.of(context).extension<AppColors>()!;
+                    final colors = Theme.of(context).extension<AppColors>()!;
                     return Container(
                       width: 8,
                       height: 8,
@@ -263,144 +287,175 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 Expanded(
-                  child: chatProvider.isLoading &&
+                  child: chatProvider.isLoadingMessages &&
                           chatProvider.currentMessages.isEmpty
                       ? const Center(child: CircularProgressIndicator())
-                      : chatProvider.currentMessages.isEmpty
+                      : !chatProvider.isLoadingMessages &&
+                              chatProvider.currentMessages.isEmpty &&
+                              chatProvider.error != null
                           ? Center(
-                              child: Text(
-                                _conversationId > 0
-                                    ? l10n.noMessages
-                                    : l10n.sendFirstMessage,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.wifi_off_rounded, size: 48),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                      'Impossible de charger les messages'),
+                                  const SizedBox(height: 16),
+                                  OutlinedButton(
+                                    onPressed: () => _chatProvider
+                                        .loadMessages(_conversationId),
+                                    child: const Text('Réessayer'),
+                                  ),
+                                ],
                               ),
                             )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AppLayout.screenPadding,
-                                  vertical: AppLayout.spacing16),
-                              itemCount: chatProvider.currentMessages.length,
-                              itemBuilder: (context, index) {
-                                final message =
-                                    chatProvider.currentMessages[index];
-                                final isMe = message.isMe;
-                                final colors =
-                                    Theme.of(context).extension<AppColors>()!;
+                          : chatProvider.currentMessages.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    _conversationId > 0
+                                        ? l10n.noMessages
+                                        : l10n.sendFirstMessage,
+                                  ),
+                                )
+                              : ListView.builder(
+                                  controller: _scrollController,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: AppLayout.screenPadding,
+                                      vertical: AppLayout.spacing16),
+                                  itemCount:
+                                      chatProvider.currentMessages.length,
+                                  itemBuilder: (context, index) {
+                                    final message =
+                                        chatProvider.currentMessages[index];
+                                    final isMe = message.isMe;
+                                    final colors = Theme.of(context)
+                                        .extension<AppColors>()!;
 
-                                final showSeparator = index == 0 ||
-                                    !_isSameDay(
-                                      chatProvider
-                                          .currentMessages[index - 1].sentAt
-                                          .toLocal(),
-                                      message.sentAt.toLocal(),
-                                    );
+                                    final showSeparator = index == 0 ||
+                                        !_isSameDay(
+                                          chatProvider
+                                              .currentMessages[index - 1].sentAt
+                                              .toLocal(),
+                                          message.sentAt.toLocal(),
+                                        );
 
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    if (showSeparator)
-                                      _ChatDateSeparator(
-                                          date: message.sentAt.toLocal()),
-                                    Align(
-                                      alignment: isMe
-                                          ? Alignment.centerRight
-                                          : Alignment.centerLeft,
-                                      child: Container(
-                                        margin: const EdgeInsets.symmetric(
-                                            vertical: AppLayout.spacing4),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppLayout.spacing16,
-                                          vertical: AppLayout.spacing8,
-                                        ),
-                                        constraints: BoxConstraints(
-                                          maxWidth:
-                                              MediaQuery.of(context).size.width *
-                                                  0.75,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isMe
-                                              ? colors.primary
-                                              : colors.surfaceElevated1,
-                                          borderRadius: BorderRadius.circular(
-                                                  AppLayout.radiusXL)
-                                              .copyWith(
-                                            bottomRight: isMe
-                                                ? const Radius.circular(0)
-                                                : Radius.circular(
-                                                    AppLayout.radiusXL),
-                                            bottomLeft: !isMe
-                                                ? const Radius.circular(0)
-                                                : Radius.circular(
-                                                    AppLayout.radiusXL),
-                                          ),
-                                          border: isMe
-                                              ? null
-                                              : Border.all(
-                                                  color: colors.borderSubtle),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              message.content,
-                                              style: TextStyle(
-                                                color: isMe
-                                                    ? colors.textOnPrimary
-                                                    : colors.textPrimary,
-                                              ),
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (showSeparator)
+                                          _ChatDateSeparator(
+                                              date: message.sentAt.toLocal()),
+                                        Align(
+                                          alignment: isMe
+                                              ? Alignment.centerRight
+                                              : Alignment.centerLeft,
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(
+                                                vertical: AppLayout.spacing4),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: AppLayout.spacing16,
+                                              vertical: AppLayout.spacing8,
                                             ),
-                                            const SizedBox(
-                                                height: AppLayout.spacing4),
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                            constraints: BoxConstraints(
+                                              maxWidth: MediaQuery.of(context)
+                                                      .size
+                                                      .width *
+                                                  0.75,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isMe
+                                                  ? colors.primary
+                                                  : colors.surfaceElevated1,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                          AppLayout.radiusXL)
+                                                      .copyWith(
+                                                bottomRight: isMe
+                                                    ? const Radius.circular(0)
+                                                    : Radius.circular(
+                                                        AppLayout.radiusXL),
+                                                bottomLeft: !isMe
+                                                    ? const Radius.circular(0)
+                                                    : Radius.circular(
+                                                        AppLayout.radiusXL),
+                                              ),
+                                              border: isMe
+                                                  ? null
+                                                  : Border.all(
+                                                      color:
+                                                          colors.borderSubtle),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  DateFormat('HH:mm').format(
-                                                      message.sentAt
-                                                          .toLocal()),
+                                                  message.content,
                                                   style: TextStyle(
-                                                    fontSize: 10,
                                                     color: isMe
                                                         ? colors.textOnPrimary
-                                                            .withValues(
-                                                                alpha: 0.7)
-                                                        : colors.textTertiary,
+                                                        : colors.textPrimary,
                                                   ),
                                                 ),
-                                                if (isMe) ...[
-                                                  const SizedBox(
-                                                      width:
-                                                          AppLayout.spacing4),
-                                                  Icon(
-                                                    _messageStatusIcon(message),
-                                                    size: 12,
-                                                    color: message
-                                                                .deliveryState ==
-                                                            MessageDeliveryState
-                                                                .failed
-                                                        ? colors.error
-                                                        : colors.textOnPrimary
-                                                            .withValues(
-                                                                alpha: 0.7),
-                                                  ),
-                                                ],
+                                                const SizedBox(
+                                                    height: AppLayout.spacing4),
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      DateFormat('HH:mm')
+                                                          .format(message.sentAt
+                                                              .toLocal()),
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: isMe
+                                                            ? colors
+                                                                .textOnPrimary
+                                                                .withValues(
+                                                                    alpha: 0.7)
+                                                            : colors
+                                                                .textTertiary,
+                                                      ),
+                                                    ),
+                                                    if (isMe) ...[
+                                                      const SizedBox(
+                                                          width: AppLayout
+                                                              .spacing4),
+                                                      Icon(
+                                                        _messageStatusIcon(
+                                                            message),
+                                                        size: 12,
+                                                        color: message
+                                                                    .deliveryState ==
+                                                                MessageDeliveryState
+                                                                    .failed
+                                                            ? colors.error
+                                                            : colors
+                                                                .textOnPrimary
+                                                                .withValues(
+                                                                    alpha: 0.7),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
                                               ],
                                             ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
+                                      ],
+                                    );
+                                  },
+                                ),
                 ),
-                if (chatProvider.error != null)
+                if (chatProvider.error != null &&
+                    chatProvider.currentMessages.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                     child: Text(
-                      'Erreur: ${chatProvider.error}',
+                      chatProvider.error!,
                       style: TextStyle(
                           color:
                               Theme.of(context).extension<AppColors>()!.error),

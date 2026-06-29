@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -27,7 +28,7 @@ class ApiService {
   }
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  final http.Client _client = http.Client();
+  http.Client _client = http.Client();
   String? _token;
   User? _currentUser;
 
@@ -75,6 +76,9 @@ class ApiService {
       return true;
     }
 
+    // TimeoutException means a dead/stale connection — don't retry immediately.
+    if (error is TimeoutException) return false;
+
     if (error is http.ClientException) {
       final message = error.message.toLowerCase();
       return message
@@ -95,20 +99,34 @@ class ApiService {
   Duration _retryDelay(int attempt) =>
       Duration(milliseconds: 300 * (1 << (attempt - 1)));
 
+  /// Replace the shared HTTP client to flush the connection pool.
+  /// Call this when the app resumes from background (Doze kills TCP sockets)
+  /// or after a timeout indicates a stale connection.
+  void flushHttpClient() {
+    _client = http.Client();
+    // The old client is abandoned; its sockets will be closed by the OS.
+  }
+
   Future<http.Response> _sendWithRetry(
-    Future<http.Response> Function() request,
-  ) async {
+    Future<http.Response> Function() request, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     Object? lastError;
 
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
-        final response = await request();
+        final response = await request().timeout(timeout);
         if (!_shouldRetryStatus(response.statusCode) || attempt == 3) {
           return response;
         }
       } catch (error) {
         lastError = error;
-        if (!_shouldRetryException(error) || attempt == 3) {
+        if (error is TimeoutException) {
+          // Stale TCP connection in the pool — flush it and retry once
+          // with a fresh client. The network is likely fine (SignalR shows it).
+          flushHttpClient();
+          if (attempt >= 2) rethrow;
+        } else if (!_shouldRetryException(error) || attempt == 3) {
           rethrow;
         }
       }
@@ -166,14 +184,15 @@ class ApiService {
   }
 
   Future<http.Response> _sendMultipartWithRetry(
-    Future<http.MultipartRequest> Function() buildRequest,
-  ) async {
+    Future<http.MultipartRequest> Function() buildRequest, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
     Object? lastError;
 
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
         final request = await buildRequest();
-        final streamedResponse = await _client.send(request);
+        final streamedResponse = await _client.send(request).timeout(timeout);
         final response = await http.Response.fromStream(streamedResponse);
         if (!_shouldRetryStatus(response.statusCode) || attempt == 3) {
           return response;
