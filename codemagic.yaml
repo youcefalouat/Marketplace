@@ -16,7 +16,7 @@ workflows:
       - name: Set up code signing settings on Xcode project
         script: |
           cd mobile/marketplace_app
-          xcode-project use-profiles
+          xcode-project use-profiles --verbose
       - name: Get Flutter packages
         script: |
           cd mobile/marketplace_app
