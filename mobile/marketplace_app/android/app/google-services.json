@@ -51,6 +51,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "269847662498-rek8n9bk44s2snn7pu3943u4ho58jr1d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.youcef.cashbuy",
+            "certificate_hash": "3d1b0f9e60946dd8bdfb02834966fa767dc485db"
+          }
+        },
+        {
           "client_id": "269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com",
           "client_type": 3
         }

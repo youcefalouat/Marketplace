@@ -29,17 +29,18 @@ workflows:
 
       - name: Apply provisioning profiles
         script: |
-          xcode-project use-profiles --verbose
+          xcode-project use-profiles
 
-      - name: Get packages
-        script: flutter pub get
+      - name: Install dependencies
+        script: |
+          flutter pub get
 
       - name: Build IPA
         script: |
           flutter build ipa --release
 
     artifacts:
-      - mobile/marketplace_app/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
 
     publishing:
       app_store_connect:
