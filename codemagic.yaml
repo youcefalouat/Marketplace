@@ -1,41 +1,47 @@
 workflows:
   ios-workflow:
     name: iOS Workflow
+
     instance_type: mac_mini_m2
     max_build_duration: 60
+
     working_directory: mobile/marketplace_app
+
     integrations:
       app_store_connect: Codemagic Flutter Build 2
+
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.youcef.cashbuy
+
     scripts:
-      - name: Set up code signing settings on Xcode project
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files \
+            com.youcef.cashbuy \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Initialize keychain
+        script: |
+          keychain initialize
+
+      - name: Apply provisioning profiles
         script: |
           xcode-project use-profiles --verbose
-      - name: Get Flutter packages
+
+      - name: Get packages
+        script: flutter pub get
+
+      - name: Build IPA
         script: |
-          flutter packages pub get
-      - name: Flutter build ipa
-        script: |
-          flutter build ipa --release \
-            --export-options-plist=/Users/builder/export_options.plist
+          flutter build ipa --release
+
     artifacts:
       - mobile/marketplace_app/build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
+
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        submit_to_app_store: false
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
-          source: true
