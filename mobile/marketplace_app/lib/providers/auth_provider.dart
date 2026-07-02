@@ -276,6 +276,25 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> requestAccountDeletion() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _apiService.requestAccountDeletion();
+      await logout();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> uploadAvatar(File imageFile) async {
     try {
       final avatarUrl = await _apiService.uploadAvatar(imageFile);

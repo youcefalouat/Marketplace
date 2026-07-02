@@ -318,6 +318,46 @@ public class AuthController : ControllerBase
         return Ok(response);
     }
 
+    // ─── POST /api/auth/request-account-deletion ─── (authenticated)
+
+    [Authorize(AuthenticationSchemes = "Bearer")]
+    [HttpPost("request-account-deletion")]
+    public async Task<IActionResult> RequestAccountDeletion()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId.Value);
+        if (user == null) return NotFound(new { message = "Utilisateur introuvable" });
+
+        if (user.IsDeleted)
+            return Ok(new { message = "Votre demande de suppression a déjà été traitée." });
+
+        var anonymizedEmail = $"deleted-{user.Id}-{Guid.NewGuid():N}@deleted.local";
+
+        user.IsDeleted = true;
+        user.Email = anonymizedEmail;
+        user.Name = "Compte supprimé";
+        user.Phone = string.Empty;
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
+        user.Provider = null;
+        user.ProviderId = null;
+        user.FcmToken = null;
+        user.AvatarUrl = null;
+        user.EmailVerified = false;
+        user.PhoneVerified = false;
+        user.EmailVerificationCode = null;
+        user.EmailVerificationExpiry = null;
+        user.PhoneVerificationCode = null;
+        user.PhoneVerificationExpiry = null;
+        user.VerifiedAt = null;
+        user.Role = UserRole.User;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Votre demande de suppression a été prise en compte." });
+    }
+
     // ─── POST /api/auth/send-verification ─── (authenticated, phone)
 
     [Authorize(AuthenticationSchemes = "Bearer")]

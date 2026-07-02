@@ -297,7 +297,8 @@ class ApiService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final errorCode = data['errorCode'] as String?;
       if (errorCode == 'EMAIL_NOT_VERIFIED') {
-        throw Exception('EMAIL_NOT_VERIFIED:${data['message'] ?? 'Veuillez vérifier votre adresse email.'}');
+        throw Exception(
+            'EMAIL_NOT_VERIFIED:${data['message'] ?? 'Veuillez vérifier votre adresse email.'}');
       }
       throw Exception(data['message'] ?? 'Email ou mot de passe incorrect');
     } else {
@@ -338,6 +339,19 @@ class ApiService {
 
   Future<void> logout() async {
     await clearToken();
+  }
+
+  Future<void> requestAccountDeletion() async {
+    final headers = await _authHeaders();
+    final response = await _post(
+      Uri.parse('$baseUrl/auth/request-account-deletion'),
+      headers: headers,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorMessage(
+          response, 'Impossible de demander la suppression du compte'));
+    }
   }
 
   // ─── Phone OTP Login (unauthenticated) ───
@@ -453,11 +467,12 @@ class ApiService {
     );
 
     if (response.statusCode == 429) {
-      throw Exception('Veuillez patienter 60 secondes avant de renvoyer un email.');
+      throw Exception(
+          'Veuillez patienter 60 secondes avant de renvoyer un email.');
     }
     if (response.statusCode != 200) {
-      throw Exception(
-          _extractErrorMessage(response, 'Erreur lors de l\'envoi de l\'email'));
+      throw Exception(_extractErrorMessage(
+          response, 'Erreur lors de l\'envoi de l\'email'));
     }
   }
 
@@ -721,15 +736,14 @@ class ApiService {
     final params = <String, String>{'count': count.toString()};
     if (communeId != null) params['communeId'] = communeId.toString();
     if (wilayaId != null) params['wilayaId'] = wilayaId.toString();
-    final uri = Uri.parse('$baseUrl/annonces/featured').replace(queryParameters: params);
+    final uri = Uri.parse('$baseUrl/annonces/featured')
+        .replace(queryParameters: params);
     final headers = await _authHeaders();
     final response = await _get(uri, headers: headers);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as List<dynamic>;
-      return json
-          .map((e) => AnnonceListItem.fromJson(e))
-          .toList();
+      return json.map((e) => AnnonceListItem.fromJson(e)).toList();
     } else {
       throw Exception(
           'Erreur lors de la récupération des annonces mises en avant');
@@ -1016,16 +1030,20 @@ class ApiService {
 
   // ─── Seller / Top Verified Users endpoints ───
 
-  Future<List<TopVerifiedUser>> getTopVerifiedUsers({int? communeId, int? wilayaId}) async {
+  Future<List<TopVerifiedUser>> getTopVerifiedUsers(
+      {int? communeId, int? wilayaId}) async {
     final params = <String, String>{};
     if (communeId != null) params['communeId'] = communeId.toString();
     if (wilayaId != null) params['wilayaId'] = wilayaId.toString();
-    final uri = Uri.parse('$baseUrl/users/top-verified').replace(queryParameters: params);
+    final uri = Uri.parse('$baseUrl/users/top-verified')
+        .replace(queryParameters: params);
     final headers = await _authHeaders();
     final response = await _get(uri, headers: headers);
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as List<dynamic>;
-      return json.map((e) => TopVerifiedUser.fromJson(e as Map<String, dynamic>)).toList();
+      return json
+          .map((e) => TopVerifiedUser.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     throw Exception('Erreur lors de la récupération des vendeurs vérifiés');
   }
@@ -1035,12 +1053,14 @@ class ApiService {
     final headers = await _authHeaders();
     final response = await _get(uri, headers: headers);
     if (response.statusCode == 200) {
-      return SellerProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return SellerProfile.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
     }
     throw Exception('Vendeur introuvable');
   }
 
-  Future<PaginatedResponse<AnnonceListItem>> getSellerAnnonces(int sellerId, {int page = 1}) async {
+  Future<PaginatedResponse<AnnonceListItem>> getSellerAnnonces(int sellerId,
+      {int page = 1}) async {
     final uri = Uri.parse('$baseUrl/sellers/$sellerId/annonces')
         .replace(queryParameters: {'page': page.toString()});
     final headers = await _authHeaders();
@@ -1054,7 +1074,8 @@ class ApiService {
     throw Exception('Erreur lors de la récupération des annonces du vendeur');
   }
 
-  Future<PaginatedResponse<SellerReview>> getSellerReviews(int sellerId, {int page = 1}) async {
+  Future<PaginatedResponse<SellerReview>> getSellerReviews(int sellerId,
+      {int page = 1}) async {
     final uri = Uri.parse('$baseUrl/sellers/$sellerId/reviews')
         .replace(queryParameters: {'page': page.toString()});
     final headers = await _authHeaders();
@@ -1068,7 +1089,8 @@ class ApiService {
     throw Exception('Erreur lors de la récupération des avis');
   }
 
-  Future<PaginatedResponse<UserSearchResult>> searchUsers(String query, {int page = 1}) async {
+  Future<PaginatedResponse<UserSearchResult>> searchUsers(String query,
+      {int page = 1}) async {
     final uri = Uri.parse('$baseUrl/users/search')
         .replace(queryParameters: {'query': query, 'page': page.toString()});
     final headers = await _authHeaders();
@@ -1104,7 +1126,8 @@ class ApiService {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       return json['avatarUrl'] as String?;
     }
-    throw Exception(_extractErrorMessage(response, 'Erreur lors du téléchargement de l\'avatar'));
+    throw Exception(_extractErrorMessage(
+        response, 'Erreur lors du téléchargement de l\'avatar'));
   }
 
   /// Detects image MIME type: extension first, then magic bytes, then jpeg fallback.
@@ -1120,19 +1143,23 @@ class ApiService {
     if (extMap.containsKey(ext)) return extMap[ext]!;
 
     // No usable extension — inspect magic bytes
-    final bytes = await file
-        .openRead(0, 16)
-        .expand<int>((chunk) => chunk)
-        .toList();
+    final bytes =
+        await file.openRead(0, 16).expand<int>((chunk) => chunk).toList();
     if (bytes.length >= 3) {
-      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return 'image/jpeg';
+      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+        return 'image/jpeg';
       if (bytes.length >= 4 &&
-          bytes[0] == 0x89 && bytes[1] == 0x50 &&
-          bytes[2] == 0x4E && bytes[3] == 0x47) return 'image/png';
+          bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47) return 'image/png';
       if (bytes.length >= 4 &&
-          bytes[0] == 0x52 && bytes[1] == 0x49 &&
-          bytes[2] == 0x46 && bytes[3] == 0x46) return 'image/webp';
-      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return 'image/gif';
+          bytes[0] == 0x52 &&
+          bytes[1] == 0x49 &&
+          bytes[2] == 0x46 &&
+          bytes[3] == 0x46) return 'image/webp';
+      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+        return 'image/gif';
     }
 
     return 'image/jpeg'; // safe default for camera/gallery photos
@@ -1145,9 +1172,13 @@ class ApiService {
     String? search,
     int page = 1,
   }) async {
-    final params = <String, String>{'verified': verified, 'page': page.toString()};
+    final params = <String, String>{
+      'verified': verified,
+      'page': page.toString()
+    };
     if (search != null && search.isNotEmpty) params['search'] = search;
-    final uri = Uri.parse('$baseUrl/admin/users/sellers').replace(queryParameters: params);
+    final uri = Uri.parse('$baseUrl/admin/users/sellers')
+        .replace(queryParameters: params);
     final token = await getToken();
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
