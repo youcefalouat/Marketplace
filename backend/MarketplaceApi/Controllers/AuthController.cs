@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using MarketplaceApi.Data;
+using Microsoft.Extensions.Logging;
 using MarketplaceApi.DTOs;
 using MarketplaceApi.Models;
 using MarketplaceApi.Services;
@@ -20,6 +21,7 @@ public class AuthController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly IEmailVerificationService _emailVerificationService;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         ApplicationDbContext context,
@@ -27,7 +29,8 @@ public class AuthController : ControllerBase
         ISmsService smsService,
         IEmailService emailService,
         IEmailVerificationService emailVerificationService,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ILogger<AuthController> logger)
     {
         _context = context;
         _tokenService = tokenService;
@@ -35,6 +38,7 @@ public class AuthController : ControllerBase
         _emailService = emailService;
         _emailVerificationService = emailVerificationService;
         _cache = cache;
+        _logger = logger;
     }
 
     // ─── Helper to build AuthResponseDto ───
@@ -324,6 +328,23 @@ public class AuthController : ControllerBase
     [HttpPost("request-account-deletion")]
     public async Task<IActionResult> RequestAccountDeletion()
     {
+        // Log incoming request authentication info for diagnostics
+        try
+        {
+            var authType = User?.Identity?.AuthenticationType ?? "(none)";
+            var isAuthenticated = User?.Identity?.IsAuthenticated ?? false;
+            var nameId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _logger?.LogInformation("RequestAccountDeletion called. AuthType={AuthType} IsAuthenticated={IsAuthenticated} NameId={NameId}", authType, isAuthenticated, nameId);
+            foreach (var claim in User?.Claims ?? Enumerable.Empty<System.Security.Claims.Claim>())
+            {
+                _logger?.LogDebug("Claim: {Type} = {Value}", claim.Type, claim.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to log authentication info for RequestAccountDeletion");
+        }
+
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
