@@ -20,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly ISmsService _smsService;
     private readonly IEmailService _emailService;
     private readonly IEmailVerificationService _emailVerificationService;
+    private readonly IAccountDeletionService _accountDeletionService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<AuthController> _logger;
 
@@ -29,6 +30,7 @@ public class AuthController : ControllerBase
         ISmsService smsService,
         IEmailService emailService,
         IEmailVerificationService emailVerificationService,
+        IAccountDeletionService accountDeletionService,
         IMemoryCache cache,
         ILogger<AuthController> logger)
     {
@@ -37,6 +39,7 @@ public class AuthController : ControllerBase
         _smsService = smsService;
         _emailService = emailService;
         _emailVerificationService = emailVerificationService;
+        _accountDeletionService = accountDeletionService;
         _cache = cache;
         _logger = logger;
     }
@@ -348,35 +351,15 @@ public class AuthController : ControllerBase
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var user = await _context.Users.FindAsync(userId.Value);
-        if (user == null) return NotFound(new { message = "Utilisateur introuvable" });
+        var result = await _accountDeletionService.RequestDeletionAsync(userId.Value);
 
-        if (user.IsDeleted)
-            return Ok(new { message = "Votre demande de suppression a déjà été traitée." });
-
-        var anonymizedEmail = $"deleted-{user.Id}-{Guid.NewGuid():N}@deleted.local";
-
-        user.IsDeleted = true;
-        user.Email = anonymizedEmail;
-        user.Name = "Compte supprimé";
-        user.Phone = string.Empty;
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
-        user.Provider = null;
-        user.ProviderId = null;
-        user.FcmToken = null;
-        user.AvatarUrl = null;
-        user.EmailVerified = false;
-        user.PhoneVerified = false;
-        user.EmailVerificationCode = null;
-        user.EmailVerificationExpiry = null;
-        user.PhoneVerificationCode = null;
-        user.PhoneVerificationExpiry = null;
-        user.VerifiedAt = null;
-        user.Role = UserRole.User;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Votre demande de suppression a été prise en compte." });
+        return result switch
+        {
+            AccountDeletionResult.Success => Ok(new { message = "Votre demande de suppression a été prise en compte." }),
+            AccountDeletionResult.AlreadyDeleted => Ok(new { message = "Votre demande de suppression a déjà été traitée." }),
+            AccountDeletionResult.NotFound => NotFound(new { message = "Utilisateur introuvable" }),
+            _ => StatusCode(500, new { message = "Erreur inattendue lors de la suppression du compte." })
+        };
     }
 
     // ─── POST /api/auth/send-verification ─── (authenticated, phone)

@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -141,6 +142,12 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Register services
 builder.Services.AddSingleton<MarketplaceApi.Services.ChatConnectionManager>();
@@ -172,6 +179,7 @@ builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 builder.Services.Configure<MarketplaceApi.Services.EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+builder.Services.AddScoped<IAccountDeletionService, AccountDeletionService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -207,6 +215,7 @@ var localizationOptions = new RequestLocalizationOptions()
     .AddSupportedUICultures(supportedCultures);
 
 app.UseRequestLocalization(localizationOptions);
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {

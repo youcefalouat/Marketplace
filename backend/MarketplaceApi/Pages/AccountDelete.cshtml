@@ -1,0 +1,75 @@
+@page "/account/delete"
+@model MarketplaceApi.Pages.AccountDeleteModel
+@{
+    ViewData["Title"] = "Suppression de compte";
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Suppression de compte - StoreCom</title>
+    <style>
+        :root { color-scheme: light dark; font-family: Arial, sans-serif; }
+        body { margin: 0; background: #f7f7f8; color: #111827; }
+        .page { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+        .card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.06); }
+        h1 { margin-top: 0; font-size: 1.8rem; }
+        p, li { line-height: 1.6; }
+        .muted { color: #6b7280; }
+        .grid { display: grid; gap: 12px; }
+        label { font-weight: 600; display: block; margin-bottom: 6px; }
+        input[type="text"], input[type="email"] { width: 100%; padding: 12px 14px; border: 1px solid #d1d5db; border-radius: 10px; box-sizing: border-box; }
+        button { background: #dc2626; color: white; border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 700; cursor: pointer; }
+        .success { background: #ecfdf3; border: 1px solid #a7f3d0; color: #065f46; padding: 14px; border-radius: 10px; margin-top: 16px; }
+        .error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 14px; border-radius: 10px; margin-top: 16px; }
+        .note { background: #f8fafc; border: 1px solid #e5e7eb; padding: 14px; border-radius: 10px; margin-top: 16px; }
+        a { color: #2563eb; }
+        @@media (max-width: 640px) { .card { padding: 18px; } h1 { font-size: 1.45rem; } }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="card">
+            <h1>Supprimer votre compte StoreCom</h1>
+            <p>Vous pouvez demander la suppression permanente de votre compte StoreCom depuis cette page publique. Cette procédure ne nécessite pas de connexion et respecte la politique Google Play pour les pages de suppression de compte.</p>
+
+            <div class="note">
+                <strong>Ce que cette demande fait :</strong>
+                <ul>
+                    <li>Supprime l'accès à votre compte et à vos annonces.</li>
+                    <li>Masque vos informations de contact et anonymise votre email.</li>
+                    <li>Supprime les données de connexion et les tokens de notification.</li>
+                </ul>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+            {
+                <div class="@(Model.IsSuccess ? "success" : "error")">@Model.StatusMessage</div>
+            }
+
+            <form method="post" class="grid" style="margin-top: 18px;">
+                <div>
+                    <label for="Identifier">Email ou numéro de téléphone utilisé pour votre compte</label>
+                    <input asp-for="Input.Identifier" id="Identifier" autocomplete="email" placeholder="ex. nom@exemple.com ou 0555xxxxxx" />
+                    <span class="muted">Nous utiliserons ces informations pour retrouver votre compte.</span>
+                </div>
+                <button type="submit">Demander la suppression du compte</button>
+            </form>
+
+            <div class="note">
+                <h2 style="margin-top: 0; font-size: 1.1rem;">Ce qui sera supprimé</h2>
+                <p>Les données liées à votre compte, telles que votre adresse e-mail, votre numéro de téléphone, votre nom, vos annonces et vos préférences, seront traitées pour la suppression. Certaines données peuvent être conservées si la loi ou les obligations réglementaires l'exigent, notamment pour la prévention de la fraude, la sécurité ou les obligations comptables et fiscales.</p>
+            </div>
+
+            <div class="note">
+                <h2 style="margin-top: 0; font-size: 1.1rem;">Besoin d'aide ?</h2>
+                <p>Si vous rencontrez un problème ou si vous souhaitez plus d'informations, contactez-nous à <a href="mailto:support@marketplace.com">support@marketplace.com</a>.</p>
+                <p>Vous pouvez aussi consulter notre <a href="/privacy">Politique de confidentialité</a>.</p>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
