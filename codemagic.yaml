@@ -27,6 +27,10 @@ workflows:
         script: |
           keychain initialize
 
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+
       - name: Apply provisioning profiles
         script: |
           xcode-project use-profiles
@@ -37,7 +41,9 @@ workflows:
 
       - name: Build IPA
         script: |
-          flutter build ipa --release
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --build-number=$BUILD_NUMBER
 
     artifacts:
       - build/ios/ipa/*.ipa
