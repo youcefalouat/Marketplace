@@ -59,6 +59,8 @@ public class Annonce
 
     public bool ReservationEnabled { get; set; } = false;
 
+    public bool IsPromoted { get; set; } = false;
+
     // Navigation properties
     public User User { get; set; } = null!;
     public Wilaya Wilaya { get; set; } = null!;

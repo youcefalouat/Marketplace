@@ -616,6 +616,7 @@ class ApiService {
     required String name,
     String arName = '',
     required String slug,
+    String? imageUrl,
     int? parentId,
   }) async {
     final headers = await _authHeaders();
@@ -626,6 +627,7 @@ class ApiService {
         'name': name,
         'arName': arName,
         'slug': slug,
+        'imageUrl': imageUrl,
         'parentId': parentId,
       }),
     );
@@ -643,6 +645,7 @@ class ApiService {
     required String name,
     String arName = '',
     required String slug,
+    String? imageUrl,
     int? parentId,
   }) async {
     final headers = await _authHeaders();
@@ -653,6 +656,7 @@ class ApiService {
         'name': name,
         'arName': arName,
         'slug': slug,
+        'imageUrl': imageUrl,
         'parentId': parentId,
       }),
     );

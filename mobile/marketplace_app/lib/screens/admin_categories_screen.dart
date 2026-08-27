@@ -49,6 +49,8 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     final arNameController =
         TextEditingController(text: category?.arName ?? '');
     final slugController = TextEditingController(text: category?.slug ?? '');
+    final imageUrlController =
+        TextEditingController(text: category?.imageUrl ?? '');
     bool isSaving = false;
 
     showDialog(
@@ -77,6 +79,13 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                     controller: slugController,
                     decoration: const InputDecoration(labelText: 'Slug'),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: imageUrlController,
+                    keyboardType: TextInputType.url,
+                    decoration:
+                        const InputDecoration(labelText: 'URL de la photo'),
+                  ),
                 ],
               ),
               actions: [
@@ -102,6 +111,9 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                                 name: nameController.text.trim(),
                                 arName: arNameController.text.trim(),
                                 slug: slugController.text.trim(),
+                                imageUrl: imageUrlController.text.trim().isEmpty
+                                    ? null
+                                    : imageUrlController.text.trim(),
                                 parentId: category.parentId, // keep same parent
                               );
                             } else {
@@ -109,6 +121,9 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                                 name: nameController.text.trim(),
                                 arName: arNameController.text.trim(),
                                 slug: slugController.text.trim(),
+                                imageUrl: imageUrlController.text.trim().isEmpty
+                                    ? null
+                                    : imageUrlController.text.trim(),
                                 parentId:
                                     parentId, // Create under parent if any
                               );

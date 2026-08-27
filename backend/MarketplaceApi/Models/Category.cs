@@ -19,6 +19,9 @@ public class Category
     [MaxLength(100)]
     public string Slug { get; set; } = string.Empty;
 
+    [MaxLength(500)]
+    public string? ImageUrl { get; set; }
+
     public int? ParentId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

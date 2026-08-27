@@ -577,18 +577,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: colors.primaryMuted,
-                      borderRadius: AppLayout.borderRadiusMedium,
-                    ),
-                    child: Icon(
-                      _iconForCategory(category.name),
-                      color: colors.primary,
-                    ),
-                  ),
+                  _buildCategoryVisual(category, colors),
                   const Spacer(),
                   Text(
                     categoryName,
@@ -661,6 +650,45 @@ class _HomeScreenState extends State<HomeScreen> {
     if (normalized.contains('telephone')) return Icons.smartphone_outlined;
     if (normalized.contains('auto')) return Icons.directions_car_outlined;
     return Icons.grid_view_rounded;
+  }
+
+  Widget _buildCategoryVisual(CategoryModel category, AppColors colors) {
+    final imageUrl = ApiService.getImageUrl(category.imageUrl);
+
+    if (imageUrl == null) {
+      return _buildCategoryIcon(category, colors);
+    }
+
+    return ClipRRect(
+      borderRadius: AppLayout.borderRadiusMedium,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: 42,
+        height: 42,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(
+          width: 42,
+          height: 42,
+          color: colors.primaryMuted,
+        ),
+        errorWidget: (_, __, ___) => _buildCategoryIcon(category, colors),
+      ),
+    );
+  }
+
+  Widget _buildCategoryIcon(CategoryModel category, AppColors colors) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: colors.primaryMuted,
+        borderRadius: AppLayout.borderRadiusMedium,
+      ),
+      child: Icon(
+        _iconForCategory(category.name),
+        color: colors.primary,
+      ),
+    );
   }
 }
 

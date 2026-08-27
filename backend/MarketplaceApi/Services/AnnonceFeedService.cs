@@ -108,9 +108,69 @@ public class AnnonceFeedService : IAnnonceFeedService
         return promoted;
     }
 
-    private Task<List<AnnonceListDto>> GetPromotedAnnoncesAsync(int count)
+    private async Task<List<AnnonceListDto>> GetPromotedAnnoncesAsync(int count)
     {
-        // Placeholder for future "promoted annonces first" logic.
-        return Task.FromResult(new List<AnnonceListDto>());
+        var promotedRaw = await _context.Annonces
+            .AsNoTracking()
+            .Include(a => a.Images)
+            .Include(a => a.Wilaya)
+            .Include(a => a.Commune)
+            .Include(a => a.Category)
+            .Where(a => a.Status == AnnonceStatus.Approved && a.IsPromoted)
+            .OrderBy(a => Guid.NewGuid())
+            .Take(count)
+            .Select(a => new
+            {
+                a.Id,
+                a.Title,
+                a.Price,
+                WilayaName = a.Wilaya.Name,
+                CommuneName = a.Commune.Name,
+                CategoryId = a.CategoryId,
+                CategoryName = a.Category.Name,
+                CategoryArName = a.Category.ArName,
+                MainImageUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImagePath).FirstOrDefault(),
+                MainThumbnailUrl = a.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ThumbnailMediumPath).FirstOrDefault(),
+                a.IsExchange,
+                a.IsGoodDeal,
+                SellerId = a.UserId,
+                a.CreatedAt
+            })
+            .ToListAsync();
+
+        if (promotedRaw.Count == 0) return new List<AnnonceListDto>();
+
+        var sellerSummaries = await _ratingService.GetSellerSummariesAsync(promotedRaw.Select(x => x.SellerId));
+
+        return promotedRaw.Select(a =>
+        {
+            double? avg = null;
+            int? ratingCount = null;
+            if (sellerSummaries.TryGetValue(a.SellerId, out var summary) && summary.RatingCount > 0)
+            {
+                avg = summary.AverageRating;
+                ratingCount = summary.RatingCount;
+            }
+
+            return new AnnonceListDto
+            {
+                Id = a.Id,
+                Title = a.Title,
+                Price = a.Price,
+                WilayaName = a.WilayaName,
+                CommuneName = a.CommuneName,
+                CategoryId = a.CategoryId,
+                Category = a.CategoryName,
+                CategoryName = a.CategoryName,
+                CategoryArName = a.CategoryArName,
+                MainImageUrl = a.MainImageUrl,
+                MainThumbnailUrl = a.MainThumbnailUrl,
+                IsExchange = a.IsExchange,
+                IsGoodDeal = a.IsGoodDeal,
+                SellerAverageRating = avg,
+                SellerRatingCount = ratingCount,
+                CreatedAt = a.CreatedAt
+            };
+        }).ToList();
     }
 }

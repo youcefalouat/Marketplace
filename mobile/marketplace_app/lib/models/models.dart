@@ -37,6 +37,7 @@ class CategoryModel {
   final String name;
   final String arName;
   final String slug;
+  final String? imageUrl;
   final int? parentId;
   final List<CategoryModel> subCategories;
 
@@ -45,6 +46,7 @@ class CategoryModel {
     required this.name,
     this.arName = '',
     required this.slug,
+    this.imageUrl,
     this.parentId,
     required this.subCategories,
   });
@@ -56,6 +58,9 @@ class CategoryModel {
       name: json['name'] as String? ?? '',
       arName: json['arName'] as String? ?? '',
       slug: json['slug'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ??
+          json['photoUrl'] as String? ??
+          json['image'] as String?,
       parentId: json['parentId'] as int?,
       subCategories: childrenJson != null
           ? (childrenJson as List)

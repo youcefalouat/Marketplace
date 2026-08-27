@@ -84,6 +84,7 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CategoryId);
             entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.IsPromoted);
         });
 
         // Category configuration

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>269847662498-410g25roubb5mql121gjaeuc2lshtra1.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.269847662498-410g25roubb5mql121gjaeuc2lshtra1</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>269847662498-8jqauthrsj42ba2c46tp8vesef87l3rq.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyD0fDVmuAQG4slbK6I_AN9z0vcLkjZQvkM</string>
+	<key>GCM_SENDER_ID</key>
+	<string>269847662498</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.youcef.cashbuy</string>
+	<key>PROJECT_ID</key>
+	<string>marketplace-f1202</string>
+	<key>STORAGE_BUCKET</key>
+	<string>marketplace-f1202.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:269847662498:ios:995575a05c64b648412cfb</string>
+</dict>
+</plist>

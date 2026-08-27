@@ -24,10 +24,17 @@ class SocialAuthService {
   static const _serverClientId =
       '269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com';
 
+  // The iOS OAuth client ID can be supplied by the build (for example by
+  // Codemagic's --dart-define) when GoogleService-Info.plist is not checked
+  // into the repository. If it is omitted, the plugin reads GIDClientID from
+  // ios/Runner/Info.plist.
+  static const _iosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
   /// Ensure GoogleSignIn.instance is initialized exactly once.
   static Future<void> _ensureGoogleInit() async {
     if (_googleInitialized) return;
     await GoogleSignIn.instance.initialize(
+      clientId: _iosClientId.isEmpty ? null : _iosClientId,
       serverClientId: _serverClientId,
     );
     _googleInitialized = true;

@@ -24,6 +24,22 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Google Sign-In configuration (from GoogleService-Info.plist). -->
+	<key>GIDClientID</key>
+	<string>269847662498-410g25roubb5mql121gjaeuc2lshtra1.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>269847662498-cgtchnggudvqejsf7746lckdcpo9tbvr.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.269847662498-410g25roubb5mql121gjaeuc2lshtra1</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

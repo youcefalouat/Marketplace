@@ -90,6 +90,7 @@ public class CategoriesController : ControllerBase
             Name = dto.Name,
             ArName = dto.ArName,
             Slug = dto.Slug,
+            ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
             ParentId = dto.ParentId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -139,6 +140,7 @@ public class CategoriesController : ControllerBase
         category.Name = dto.Name;
         category.ArName = dto.ArName;
         category.Slug = dto.Slug;
+        category.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
         category.ParentId = dto.ParentId;
         category.UpdatedAt = DateTime.UtcNow;
 
@@ -188,6 +190,7 @@ public class CategoriesController : ControllerBase
             Name = category.Name,
             ArName = category.ArName,
             Slug = category.Slug,
+            ImageUrl = category.ImageUrl,
             ParentId = category.ParentId,
             Children = allCategories
                 .Where(c => c.ParentId == category.Id)

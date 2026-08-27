@@ -8,6 +8,7 @@ public class CategoryDto
     public string Name { get; set; } = string.Empty;
     public string ArName { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
     public int? ParentId { get; set; }
     public List<CategoryDto> Children { get; set; } = new();
 
@@ -30,6 +31,9 @@ public class CreateCategoryDto
     [Required]
     [MaxLength(100)]
     public string Slug { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? ImageUrl { get; set; }
     
     public int? ParentId { get; set; }
 }
@@ -46,6 +50,9 @@ public class UpdateCategoryDto
     [Required]
     [MaxLength(100)]
     public string Slug { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? ImageUrl { get; set; }
     
     public int? ParentId { get; set; }
 }

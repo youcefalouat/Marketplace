@@ -60,7 +60,7 @@ public class UsersController : ControllerBase
             WilayaName = user.Wilaya.Name,
             CommuneName = user.Commune.Name,
             Role = user.Role.ToString(),
-            PhoneVerified = true,
+            PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
             AvatarUrl = user.AvatarUrl,
             IsVerifiedSeller = user.IsVerifiedSeller
@@ -114,7 +114,7 @@ public class UsersController : ControllerBase
             WilayaName = wilaya.Name,
             CommuneName = commune.Name,
             Role = user.Role.ToString(),
-            PhoneVerified = true,
+            PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
             AvatarUrl = user.AvatarUrl,
             IsVerifiedSeller = user.IsVerifiedSeller
