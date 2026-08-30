@@ -53,6 +53,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  flutter_launcher_icons: "^0.14.4"
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/fesh_bay_logo.png"
 
 flutter:
   uses-material-design: true
@@ -60,4 +66,4 @@ flutter:
 
   assets:
     - assets/config/app_config.json
-    - assets/images/fesh_bay_logo.png
+    - assets/images/fesh_bay_logo.png 
