@@ -32,8 +32,8 @@ public class SellersController : ControllerBase
             .Select(u => new
             {
                 u.Id, u.Name, u.AvatarUrl, u.IsVerifiedSeller, u.CreatedAt,
-                WilayaName = u.Wilaya.Name,
-                CommuneName = u.Commune.Name,
+                WilayaName = u.Wilaya != null ? u.Wilaya.Name : "",
+                CommuneName = u.Commune != null ? u.Commune.Name : "",
                 TotalAnnonces = u.Annonces.Count(a => a.Status == AnnonceStatus.Approved)
             })
             .FirstOrDefaultAsync();

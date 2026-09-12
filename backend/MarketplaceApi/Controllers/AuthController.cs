@@ -1,8 +1,12 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using MarketplaceApi.Data;
 using Microsoft.Extensions.Logging;
 using MarketplaceApi.DTOs;
@@ -23,6 +27,7 @@ public class AuthController : ControllerBase
     private readonly IAccountDeletionService _accountDeletionService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<AuthController> _logger;
+    private readonly AppleAuthSettings _appleSettings;
 
     public AuthController(
         ApplicationDbContext context,
@@ -32,7 +37,8 @@ public class AuthController : ControllerBase
         IEmailVerificationService emailVerificationService,
         IAccountDeletionService accountDeletionService,
         IMemoryCache cache,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IOptions<AppleAuthSettings> appleSettings)
     {
         _context = context;
         _tokenService = tokenService;
@@ -42,6 +48,7 @@ public class AuthController : ControllerBase
         _accountDeletionService = accountDeletionService;
         _cache = cache;
         _logger = logger;
+        _appleSettings = appleSettings.Value;
     }
 
     // ─── Helper to build AuthResponseDto ───
@@ -98,14 +105,27 @@ public class AuthController : ControllerBase
         if (existing)
             return BadRequest(new { message = "Un compte avec cet email existe déjà" });
 
-        var wilaya = await _context.Wilayas.FindAsync(dto.WilayaId);
-        if (wilaya == null)
-            return BadRequest(new { message = "Wilaya invalide" });
+        Wilaya? wilaya = null;
+        Commune? commune = null;
 
-        var commune = await _context.Communes
-            .FirstOrDefaultAsync(c => c.Id == dto.CommuneId && c.WilayaId == dto.WilayaId);
-        if (commune == null)
-            return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+        // if (dto.WilayaId.HasValue)
+        // {
+        //     wilaya = await _context.Wilayas.FindAsync(dto.WilayaId.Value);
+        //     if (wilaya == null)
+        //         return BadRequest(new { message = "Wilaya invalide" });
+
+        //     if (dto.CommuneId.HasValue)
+        //     {
+        //         commune = await _context.Communes
+        //             .FirstOrDefaultAsync(c => c.Id == dto.CommuneId.Value && c.WilayaId == dto.WilayaId.Value);
+        //         if (commune == null)
+        //             return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+        //     }
+        // }
+        // else if (dto.CommuneId.HasValue)
+        // {
+        //     return BadRequest(new { message = "Une commune nécessite une wilaya" });
+        // }
 
         var verificationToken = _emailVerificationService.GenerateToken();
 
@@ -203,19 +223,14 @@ public class AuthController : ControllerBase
 
         if (user == null)
         {
-            var algerWilaya = await _context.Wilayas.FirstOrDefaultAsync(w => w.Code == "16");
-            var algerCommune = algerWilaya != null
-                ? await _context.Communes.FirstOrDefaultAsync(c => c.WilayaId == algerWilaya.Id)
-                : null;
-
             user = new User
             {
                 Email = dto.Email.Trim().ToLower(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                 Name = dto.Name.Trim(),
                 Phone = "",
-                WilayaId = algerWilaya?.Id ?? 1,
-                CommuneId = algerCommune?.Id ?? 1,
+                WilayaId = null,
+                CommuneId = null,
                 Role = UserRole.User,
                 Provider = dto.Provider,
                 ProviderId = dto.ProviderId,
@@ -227,9 +242,6 @@ public class AuthController : ControllerBase
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
-
-            user.Wilaya = algerWilaya!;
-            user.Commune = algerCommune!;
         }
 
         if (user.IsDeleted)
@@ -237,6 +249,206 @@ public class AuthController : ControllerBase
 
         var response = await BuildAuthResponse(user);
         return Ok(response);
+    }
+
+    // ─── POST /api/auth/apple-login ───
+
+    [HttpPost("apple-login")]
+    public async Task<IActionResult> AppleLogin([FromBody] AppleLoginDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new { message = "Données invalides" });
+
+        try
+        {
+            // ── Step 1: Validate the identity token via Apple's JWKS ──
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+
+            using var httpClient = new HttpClient();
+            var jwksResponse = await httpClient.GetStringAsync("https://appleid.apple.com/auth/keys");
+            var jwks = new JsonWebKeySet(jwksResponse);
+
+            var validationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = "https://appleid.apple.com",
+                ValidateAudience = true,
+                ValidAudience = _appleSettings.BundleId,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidAlgorithms = new[] { "ES256" },
+                IssuerSigningKeys = jwks.GetSigningKeys()
+            };
+
+            var principal = handler.ValidateToken(
+                dto.IdentityToken,
+                validationParameters,
+                out _);
+
+            var subject = principal.FindFirst("sub")?.Value;
+            var emailClaim = principal.FindFirst("email")?.Value;
+
+            if (string.IsNullOrWhiteSpace(subject))
+                return BadRequest(new { message = "Jeton Apple invalide, subject manquant" });
+
+            // ── Step 2: Exchange authorization code with Apple's token endpoint ──
+            if (!string.IsNullOrEmpty(_appleSettings.PrivateKey))
+            {
+                var clientSecret = GenerateAppleClientSecret();
+
+                var tokenResponse = await httpClient.PostAsync(
+                    "https://appleid.apple.com/auth/token",
+                    new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                        ["client_id"] = _appleSettings.BundleId,
+                        ["client_secret"] = clientSecret,
+                        ["code"] = dto.AuthorizationCode,
+                        ["grant_type"] = "authorization_code"
+                    }));
+
+                if (!tokenResponse.IsSuccessStatusCode)
+                {
+                    var errorBody = await tokenResponse.Content.ReadAsStringAsync();
+                    _logger.LogWarning(
+                        "Apple token exchange failed ({Status}): {Body}",
+                        tokenResponse.StatusCode, errorBody);
+                    return BadRequest(new { message = "Échec de la vérification du code Apple" });
+                }
+
+                // The id_token returned by Apple's /auth/token is the canonical
+                // source of truth. Parse it to confirm the subject matches.
+                var body = await tokenResponse.Content.ReadAsStringAsync();
+                var tokenJson = System.Text.Json.JsonDocument.Parse(body);
+                if (tokenJson.RootElement.TryGetProperty("id_token", out var idTokenProp))
+                {
+                    var exchangedToken = handler.ReadJwtToken(idTokenProp.GetString());
+                    var exchangedSub = exchangedToken.Subject;
+                    if (exchangedSub != subject)
+                    {
+                        _logger.LogWarning(
+                            "Apple subject mismatch: identity_token sub={IdSub}, token_exchange sub={ExSub}",
+                            subject, exchangedSub);
+                        return BadRequest(new { message = "Incohérence du jeton Apple" });
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Apple PrivateKey is not configured — skipping authorization code exchange. "
+                    + "Identity token validation only.");
+            }
+
+            // ── Step 3: Find or create user ──
+            if (string.IsNullOrWhiteSpace(emailClaim))
+                return BadRequest(new { message = "Jeton Apple invalide, email manquant" });
+
+            var user = await _context.Users
+                .Include(u => u.Wilaya)
+                .Include(u => u.Commune)
+                .FirstOrDefaultAsync(u => u.Provider == "Apple" && u.ProviderId == subject);
+
+            if (user == null)
+            {
+                user = await _context.Users
+                    .Include(u => u.Wilaya)
+                    .Include(u => u.Commune)
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == emailClaim.ToLower());
+
+                if (user != null)
+                {
+                    user.Provider = "Apple";
+                    user.ProviderId = subject;
+                    user.EmailVerified = true;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            if (user == null)
+            {
+                var name = "Utilisateur";
+                if (!string.IsNullOrEmpty(dto.FirstName) || !string.IsNullOrEmpty(dto.LastName))
+                {
+                    name = $"{dto.FirstName} {dto.LastName}".Trim();
+                }
+
+                user = new User
+                {
+                    Email = emailClaim.Trim().ToLower(),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                    Name = name,
+                    Phone = "",
+                    WilayaId = null,
+                    CommuneId = null,
+                    Role = UserRole.User,
+                    Provider = "Apple",
+                    ProviderId = subject,
+                    EmailVerified = true,
+                    VerifiedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+            }
+
+            if (user.IsDeleted)
+                return Unauthorized(new { message = "Ce compte a été désactivé" });
+
+            var response = await BuildAuthResponse(user);
+            return Ok(response);
+        }
+        catch (SecurityTokenValidationException ex)
+        {
+            _logger.LogWarning(ex, "Apple identity token validation failed");
+            return BadRequest(new { message = "Le jeton Apple fourni est invalide ou a expiré" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erreur lors de la validation du jeton Apple");
+            return BadRequest(new { message = "Le jeton Apple fourni est invalide ou a expiré" });
+        }
+    }
+
+    /// <summary>
+    /// Generates an Apple client_secret JWT signed with ES256 using the .p8 private key.
+    /// See: https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens
+    /// </summary>
+    private string GenerateAppleClientSecret()
+    {
+        // Parse PEM-encoded .p8 key (PKCS#8 ECPrivateKey)
+        var keyBytes = Convert.FromBase64String(
+            _appleSettings.PrivateKey
+                .Replace("-----BEGIN PRIVATE KEY-----", "")
+                .Replace("-----END PRIVATE KEY-----", "")
+                .Replace("\n", "")
+                .Replace("\r", "")
+                .Trim());
+
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportPkcs8PrivateKey(keyBytes, out _);
+
+        var now = DateTimeOffset.UtcNow;
+        var signingCredentials = new SigningCredentials(
+            new ECDsaSecurityKey(ecdsa) { KeyId = _appleSettings.KeyId },
+            SecurityAlgorithms.EcdsaSha256);
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Issuer = _appleSettings.TeamId,         // iss = Team ID
+            Audience = "https://appleid.apple.com", // aud = Apple
+            Subject = new ClaimsIdentity(new[]
+            {
+                new Claim("sub", _appleSettings.BundleId) // sub = client_id (Bundle ID)
+            }),
+            NotBefore = now.UtcDateTime,
+            Expires = now.AddMonths(5).UtcDateTime,  // Apple max is 6 months
+            IssuedAt = now.UtcDateTime,
+            SigningCredentials = signingCredentials
+        };
+
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        return tokenHandler.CreateEncodedJwt(tokenDescriptor);
     }
 
     // ─── POST /api/auth/phone-login-request ───

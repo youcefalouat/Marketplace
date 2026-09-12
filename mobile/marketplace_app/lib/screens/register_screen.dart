@@ -90,15 +90,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedWilaya == null || _selectedCommune == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Veuillez sélectionner votre wilaya et commune'),
-          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
-        ),
-      );
-      return;
-    }
     if (!_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -116,8 +107,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       password: _passwordController.text,
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
-      wilayaId: _selectedWilaya!.id,
-      communeId: _selectedCommune!.id,
+      wilayaId: _selectedWilaya?.id,
+      communeId: _selectedCommune?.id,
     );
 
     if (!mounted) return;
@@ -195,9 +186,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _appleLogin() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    try {
+      final result = await SocialAuthService.signInWithApple();
+      if (result == null) return;
+
+      final success = await authProvider.appleLogin(
+        identityToken: result.identityToken!,
+        authorizationCode: result.authorizationCode ?? '',
+        firstName: result.firstName,
+        lastName: result.lastName,
+      );
+
+      if (success && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.error ?? 'Erreur de connexion Apple'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
+        );
+      }
+    }
+  }
+
   void _phoneLogin() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PhoneVerificationScreen()),
+      MaterialPageRoute(builder: (_) => const PhoneVerificationScreen()),
     );
   }
 
@@ -285,8 +315,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final isLoading = context.select<AuthProvider, bool>((a) => a.isLoading);
-    final languageCode =
-        context.watch<LocaleProvider>().locale.languageCode;
+    final languageCode = context.watch<LocaleProvider>().locale.languageCode;
 
     return Scaffold(
       appBar: AppBar(
@@ -381,28 +410,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         initialValue: _selectedWilaya,
                         isExpanded: true,
                         decoration: InputDecoration(
-                          labelText: 'Wilaya',
-                          prefixIcon:
-                              const Icon(Icons.location_city_outlined),
+                          labelText: 'Wilaya (optionnel)',
+                          prefixIcon: const Icon(Icons.location_city_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        items: _wilayas
-                            .map((w) => DropdownMenuItem(
-                                  value: w,
-                                  child: Text('${w.code} - ${w.name}'),
-                                ))
-                            .toList(),
+                        items: [
+                          const DropdownMenuItem<Wilaya>(
+                            value: null,
+                            child: Text('Aucune'),
+                          ),
+                          ..._wilayas.map((w) => DropdownMenuItem(
+                                value: w,
+                                child: Text('${w.code} - ${w.name}'),
+                              )),
+                        ],
                         onChanged: (wilaya) {
-                          setState(() => _selectedWilaya = wilaya);
+                          setState(() {
+                            _selectedWilaya = wilaya;
+                            _selectedCommune = null;
+                            _communes = [];
+                          });
                           if (wilaya != null) _loadCommunes(wilaya.id);
-                        },
-                        validator: (value) {
-                          if (value == null) {
-                            return 'Veuillez sélectionner une wilaya';
-                          }
-                          return null;
                         },
                       ),
                 const SizedBox(height: 16),
@@ -414,30 +444,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         initialValue: _selectedCommune,
                         isExpanded: true,
                         decoration: InputDecoration(
-                          labelText: 'Commune',
-                          prefixIcon:
-                              const Icon(Icons.location_on_outlined),
+                          labelText: 'Commune (optionnel)',
+                          prefixIcon: const Icon(Icons.location_on_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        items: _communes
-                            .map((c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(c.name),
-                                ))
-                            .toList(),
+                        items: [
+                          const DropdownMenuItem<Commune>(
+                            value: null,
+                            child: Text('Aucune'),
+                          ),
+                          ..._communes.map((c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(c.name),
+                              )),
+                        ],
                         onChanged: _selectedWilaya == null
                             ? null
                             : (commune) {
                                 setState(() => _selectedCommune = commune);
                               },
-                        validator: (value) {
-                          if (value == null) {
-                            return 'Veuillez sélectionner une commune';
-                          }
-                          return null;
-                        },
                       ),
                 const SizedBox(height: 16),
 
@@ -516,7 +543,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: (isLoading || !_acceptedTerms) ? null : _register,
+                    onPressed:
+                        (isLoading || !_acceptedTerms) ? null : _register,
                     style: ElevatedButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -558,6 +586,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   onPressed: isLoading ? null : _googleLogin,
                   icon: const Icon(Icons.g_mobiledata, size: 32),
                   label: const Text("S'inscrire avec Google"),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                OutlinedButton.icon(
+                  onPressed: isLoading ? null : _appleLogin,
+                  icon: const Icon(Icons.apple),
+                  label: const Text("S'inscrire avec Apple"),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(

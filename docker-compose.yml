@@ -47,6 +47,10 @@ services:
       - Email__Username=${EMAIL_USERNAME:-}
       - Email__BaseUrl=${EMAIL_BASE_URL:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - Apple__TeamId=${APPLE_TEAM_ID:-JQ82C4XD2H}
+      - Apple__KeyId=${APPLE_KEY_ID:-29H29FBW8W}
+      - Apple__BundleId=${APPLE_BUNDLE_ID:-com.youcef.cashbuy}
+      - Apple__PrivateKey=${APPLE_PRIVATE_KEY:-}
     ports:
       - "${MARKETPLACE_API_PORT:-5000}:8080"
     volumes:

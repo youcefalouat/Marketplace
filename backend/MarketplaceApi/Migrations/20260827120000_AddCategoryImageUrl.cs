@@ -1,10 +1,15 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+using MarketplaceApi.Data;
 
 #nullable disable
 
 namespace MarketplaceApi.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260827120000_AddCategoryImageUrl")]
     public partial class AddCategoryImageUrl : Migration
     {
         /// <inheritdoc />

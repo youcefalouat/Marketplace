@@ -161,6 +161,9 @@ builder.Services.Configure<ImageProcessingOptions>(builder.Configuration.GetSect
 builder.Services.AddScoped<IAnnonceFeedService, AnnonceFeedService>();
 builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
 
+// Configure Apple Sign-In
+builder.Services.Configure<MarketplaceApi.Models.AppleAuthSettings>(builder.Configuration.GetSection("Apple"));
+
 // Configure Firebase
 try
 {

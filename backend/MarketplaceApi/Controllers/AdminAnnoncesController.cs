@@ -143,8 +143,8 @@ public class AdminAnnoncesController : ControllerBase
                 Id = annonce.UserId,
                 Name = annonce.User.Name,
                 Phone = annonce.User.Phone,
-                WilayaName = annonce.User.Wilaya.Name,
-                CommuneName = annonce.User.Commune.Name,
+                WilayaName = annonce.User.Wilaya?.Name ?? "",
+                CommuneName = annonce.User.Commune?.Name ?? "",
                 AverageRating = null,
                 RatingCount = null
             },

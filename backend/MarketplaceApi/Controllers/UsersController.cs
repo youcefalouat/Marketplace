@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MarketplaceApi.Data;
 using MarketplaceApi.DTOs;
+using MarketplaceApi.Models;
 using MarketplaceApi.Services;
 
 namespace MarketplaceApi.Controllers;
@@ -57,8 +58,8 @@ public class UsersController : ControllerBase
             Phone = user.Phone,
             WilayaId = user.WilayaId,
             CommuneId = user.CommuneId,
-            WilayaName = user.Wilaya.Name,
-            CommuneName = user.Commune.Name,
+            WilayaName = user.Wilaya?.Name ?? "",
+            CommuneName = user.Commune?.Name ?? "",
             Role = user.Role.ToString(),
             PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
@@ -82,19 +83,26 @@ public class UsersController : ControllerBase
             return NotFound();
         }
         
-        // Validate wilaya and commune
-        var wilaya = await _context.Wilayas.FindAsync(dto.WilayaId);
-        if (wilaya == null)
-        {
-            return BadRequest(new { message = "Wilaya invalide" });
-        }
-        
-        var commune = await _context.Communes.FirstOrDefaultAsync(
-            c => c.Id == dto.CommuneId && c.WilayaId == dto.WilayaId);
-        if (commune == null)
-        {
-            return BadRequest(new { message = "Commune invalide pour cette wilaya" });
-        }
+        Wilaya? wilaya = null;
+        Commune? commune = null;
+        // if (dto.WilayaId.HasValue)
+        // {
+        //     wilaya = await _context.Wilayas.FindAsync(dto.WilayaId.Value);
+        //     if (wilaya == null)
+        //         return BadRequest(new { message = "Wilaya invalide" });
+
+        //     if (dto.CommuneId.HasValue)
+        //     {
+        //         commune = await _context.Communes.FirstOrDefaultAsync(
+        //             c => c.Id == dto.CommuneId.Value && c.WilayaId == dto.WilayaId.Value);
+        //         if (commune == null)
+        //             return BadRequest(new { message = "Commune invalide pour cette wilaya" });
+        //     }
+        // }
+        // else if (dto.CommuneId.HasValue)
+        // {
+        //     return BadRequest(new { message = "Une commune nécessite une wilaya" });
+        // }
         
         user.Name = dto.Name;
         user.Phone = dto.Phone;
@@ -111,8 +119,8 @@ public class UsersController : ControllerBase
             Phone = user.Phone,
             WilayaId = user.WilayaId,
             CommuneId = user.CommuneId,
-            WilayaName = wilaya.Name,
-            CommuneName = commune.Name,
+            WilayaName = wilaya?.Name ?? "",
+            CommuneName = commune?.Name ?? "",
             Role = user.Role.ToString(),
             PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
@@ -176,7 +184,8 @@ public class UsersController : ControllerBase
             .Select(u => new
             {
                 u.Id, u.Name, u.AvatarUrl, u.CreatedAt,
-                WilayaName = u.Wilaya.Name, CommuneName = u.Commune.Name,
+                WilayaName = u.Wilaya != null ? u.Wilaya.Name : "",
+                CommuneName = u.Commune != null ? u.Commune.Name : "",
                 u.WilayaId, u.CommuneId,
                 TotalAnnonces = u.Annonces.Count(a => a.Status == MarketplaceApi.Models.AnnonceStatus.Approved)
             })
@@ -239,8 +248,8 @@ public class UsersController : ControllerBase
             var lower = query.ToLower();
             q = q.Where(u =>
                 u.Name.ToLower().Contains(lower) ||
-                u.Commune.Name.ToLower().Contains(lower) ||
-                u.Wilaya.Name.ToLower().Contains(lower));
+                (u.Commune != null && u.Commune.Name.ToLower().Contains(lower)) ||
+                (u.Wilaya != null && u.Wilaya.Name.ToLower().Contains(lower)));
         }
 
         var totalCount = await q.CountAsync();
@@ -250,7 +259,8 @@ public class UsersController : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(u => new { u.Id, u.Name, u.AvatarUrl, u.IsVerifiedSeller,
-                WilayaName = u.Wilaya.Name, CommuneName = u.Commune.Name })
+                WilayaName = u.Wilaya != null ? u.Wilaya.Name : "",
+                CommuneName = u.Commune != null ? u.Commune.Name : "" })
             .ToListAsync();
 
         var sellerIds = usersRaw.Select(u => u.Id).ToList();

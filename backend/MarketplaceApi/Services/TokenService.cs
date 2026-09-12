@@ -38,8 +38,8 @@ public class TokenService : ITokenService
             new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("phone", user.Phone),
-            new Claim("wilayaId", user.WilayaId.ToString()),
-            new Claim("communeId", user.CommuneId.ToString())
+            new Claim("wilayaId", user.WilayaId?.ToString() ?? string.Empty),
+            new Claim("communeId", user.CommuneId?.ToString() ?? string.Empty)
         };
         
         var token = new JwtSecurityToken(

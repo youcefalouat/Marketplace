@@ -23,19 +23,17 @@ public class User
     [MaxLength(20)]
     public string Phone { get; set; } = string.Empty;
     
-    [Required]
-    public int WilayaId { get; set; }
+    public int? WilayaId { get; set; }
     
-    [Required]
-    public int CommuneId { get; set; }
+    public int? CommuneId { get; set; }
     
     public UserRole Role { get; set; } = UserRole.User;
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     // Navigation properties
-    public Wilaya Wilaya { get; set; } = null!;
-    public Commune Commune { get; set; } = null!;
+    public Wilaya? Wilaya { get; set; }
+    public Commune? Commune { get; set; }
     public ICollection<Annonce> Annonces { get; set; } = new List<Annonce>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
     public ICollection<UserRating> ReceivedRatings { get; set; } = new List<UserRating>();

@@ -117,23 +117,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedWilaya == null || _selectedCommune == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Veuillez sélectionner une wilaya et une commune'),
-          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
-        ),
-      );
-      return;
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    final wilayaId = _selectedWilaya?.id ?? user?.wilayaId;
+    final communeId = _selectedCommune?.id ??
+        (wilayaId == user?.wilayaId ? user?.communeId : null);
+
     final success = await authProvider.updateProfile(
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
-      wilayaId: _selectedWilaya!.id,
-      communeId: _selectedCommune!.id,
+      wilayaId: wilayaId,
+      communeId: communeId,
     );
 
     if (mounted) {

@@ -271,6 +271,11 @@ public class AnnoncesController : ControllerBase
         var wilayaId = dto.WilayaId ?? user.WilayaId;
         var communeId = dto.CommuneId ?? user.CommuneId;
         
+        if (wilayaId == null || communeId == null)
+        {
+            return BadRequest(new { message = "Vous devez spécifier une wilaya et une commune pour publier une annonce." });
+        }
+        
         // Validate wilaya/commune if provided
         if (dto.WilayaId.HasValue || dto.CommuneId.HasValue)
         {
@@ -291,8 +296,8 @@ public class AnnoncesController : ControllerBase
             CategoryId = dto.CategoryId,
             State = dto.State,
             Phone = dto.Phone ?? user.Phone,
-            WilayaId = wilayaId,
-            CommuneId = communeId,
+            WilayaId = wilayaId.Value,
+            CommuneId = communeId.Value,
             ReservationEnabled = dto.ReservationEnabled,
             IsExchange = dto.ReservationEnabled ? false : dto.IsExchange,
             ShowPhone = dto.ReservationEnabled ? false : dto.ShowPhone,
@@ -510,8 +515,8 @@ public class AnnoncesController : ControllerBase
                 Name = annonce.User.Name,
                 AvatarUrl = annonce.User.AvatarUrl,
                 Phone = annonce.ShowPhone ? annonce.User.Phone : string.Empty,
-                WilayaName = annonce.User.Wilaya.Name,
-                CommuneName = annonce.User.Commune.Name,
+                WilayaName = annonce.User.Wilaya?.Name ?? "",
+                CommuneName = annonce.User.Commune?.Name ?? "",
                 AverageRating = avg,
                 RatingCount = count,
                 IsVerifiedSeller = annonce.User.IsVerifiedSeller

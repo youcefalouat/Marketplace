@@ -8,7 +8,6 @@ import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 import 'complete_profile_screen.dart';
-import 'phone_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -111,10 +110,50 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _phoneLogin() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
-    );
+  Future<void> _appleLogin() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    try {
+      final result = await SocialAuthService.signInWithApple();
+      if (result == null) return;
+
+      final success = await authProvider.appleLogin(
+        identityToken: result.identityToken!,
+        authorizationCode: result.authorizationCode ?? '',
+        firstName: result.firstName,
+        lastName: result.lastName,
+      );
+
+      if (success && mounted) {
+        if (authProvider.user?.phone.isEmpty ?? true) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.error ?? 'Erreur de connexion Apple'),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Theme.of(context).extension<AppColors>()!.error,
+          ),
+        );
+      }
+    }
   }
 
   void _continueAsGuest() {
@@ -276,11 +315,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Phone OTP button
                         OutlinedButton.icon(
-                          onPressed: isLoading ? null : _phoneLogin,
-                          icon: const Icon(Icons.phone_android),
-                          label: const Text('Continuer avec Téléphone'),
+                          onPressed: isLoading ? null : _appleLogin,
+                          icon: const Icon(Icons.apple),
+                          label: const Text('Continuer avec Apple'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 50),
                             shape: RoundedRectangleBorder(
@@ -288,6 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 12),
                         const SizedBox(height: 24),
 
                         // Register link

@@ -75,8 +75,8 @@ class AuthProvider with ChangeNotifier {
     required String password,
     required String name,
     required String phone,
-    required int wilayaId,
-    required int communeId,
+    int? wilayaId,
+    int? communeId,
   }) async {
     _isLoading = true;
     _error = null;
@@ -173,6 +173,36 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> appleLogin({
+    required String identityToken,
+    required String authorizationCode,
+    String? firstName,
+    String? lastName,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final authResponse = await _apiService.appleLogin(
+        identityToken: identityToken,
+        authorizationCode: authorizationCode,
+        firstName: firstName,
+        lastName: lastName,
+      );
+      _user = authResponse.user;
+      _updateFcmToken();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ─── Phone OTP Login ───
 
   Future<void> requestPhoneOtp(String phone) async {
@@ -216,8 +246,8 @@ class AuthProvider with ChangeNotifier {
   Future<bool> updateProfile({
     required String name,
     required String phone,
-    required int wilayaId,
-    required int communeId,
+    int? wilayaId,
+    int? communeId,
   }) async {
     _isLoading = true;
     _error = null;

@@ -248,20 +248,21 @@ class ApiService {
     required String password,
     required String name,
     required String phone,
-    required int wilayaId,
-    required int communeId,
+    int? wilayaId,
+    int? communeId,
   }) async {
+    final body = <String, dynamic>{
+      'email': email,
+      'password': password,
+      'name': name,
+      'phone': phone,
+      if (wilayaId != null) 'wilayaId': wilayaId,
+      if (communeId != null) 'communeId': communeId,
+    };
     final response = await _post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-        'name': name,
-        'phone': phone,
-        'wilayaId': wilayaId,
-        'communeId': communeId,
-      }),
+      body: jsonEncode(body),
     );
 
     if (response.statusCode == 200) {
@@ -335,6 +336,34 @@ class ApiService {
       throw Exception(
           _extractErrorMessage(response, 'Erreur de connexion sociale'));
     }
+  }
+
+  Future<AuthResponse> appleLogin({
+    required String identityToken,
+    required String authorizationCode,
+    String? firstName,
+    String? lastName,
+  }) async {
+    final response = await _post(
+      Uri.parse('$baseUrl/auth/apple-login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'identityToken': identityToken,
+        'authorizationCode': authorizationCode,
+        if (firstName != null && firstName.isNotEmpty) 'firstName': firstName,
+        if (lastName != null && lastName.isNotEmpty) 'lastName': lastName,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final authResponse = AuthResponse.fromJson(jsonDecode(response.body));
+      await setToken(authResponse.token);
+      _currentUser = authResponse.user;
+      return authResponse;
+    }
+
+    throw Exception(
+        _extractErrorMessage(response, 'Erreur de connexion avec Apple'));
   }
 
   Future<void> logout() async {
@@ -527,8 +556,8 @@ class ApiService {
   Future<User> updateProfile({
     required String name,
     required String phone,
-    required int wilayaId,
-    required int communeId,
+    int? wilayaId,
+    int? communeId,
   }) async {
     final headers = await _authHeaders();
     final response = await _put(
@@ -537,8 +566,8 @@ class ApiService {
       body: jsonEncode({
         'name': name,
         'phone': phone,
-        'wilayaId': wilayaId,
-        'communeId': communeId,
+        if (wilayaId != null) 'wilayaId': wilayaId,
+        if (communeId != null) 'communeId': communeId,
       }),
     );
 
@@ -1150,20 +1179,26 @@ class ApiService {
     final bytes =
         await file.openRead(0, 16).expand<int>((chunk) => chunk).toList();
     if (bytes.length >= 3) {
-      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
         return 'image/jpeg';
+      }
       if (bytes.length >= 4 &&
           bytes[0] == 0x89 &&
           bytes[1] == 0x50 &&
           bytes[2] == 0x4E &&
-          bytes[3] == 0x47) return 'image/png';
+          bytes[3] == 0x47) {
+        return 'image/png';
+      }
       if (bytes.length >= 4 &&
           bytes[0] == 0x52 &&
           bytes[1] == 0x49 &&
           bytes[2] == 0x46 &&
-          bytes[3] == 0x46) return 'image/webp';
-      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+          bytes[3] == 0x46) {
+        return 'image/webp';
+      }
+      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
         return 'image/gif';
+      }
     }
 
     return 'image/jpeg'; // safe default for camera/gallery photos

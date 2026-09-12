@@ -179,8 +179,8 @@ class User {
   final String email;
   final String name;
   final String phone;
-  final int wilayaId;
-  final int communeId;
+  final int? wilayaId;
+  final int? communeId;
   final String wilayaName;
   final String communeName;
   final String role;
@@ -196,8 +196,8 @@ class User {
     required this.email,
     required this.name,
     required this.phone,
-    required this.wilayaId,
-    required this.communeId,
+    this.wilayaId,
+    this.communeId,
     required this.wilayaName,
     required this.communeName,
     required this.role,
@@ -215,8 +215,8 @@ class User {
       email: json['email'] as String,
       name: json['name'] as String,
       phone: json['phone'] as String,
-      wilayaId: json['wilayaId'] as int,
-      communeId: json['communeId'] as int,
+      wilayaId: json['wilayaId'] as int?,
+      communeId: json['communeId'] as int?,
       wilayaName: json['wilayaName'] as String? ?? '',
       communeName: json['communeName'] as String? ?? '',
       role: json['role'] as String,

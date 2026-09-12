@@ -71,16 +71,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedWilaya == null || _selectedCommune == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Veuillez sélectionner votre wilaya et commune'),
-          backgroundColor: Theme.of(context).extension<AppColors>()!.error,
-        ),
-      );
-      return;
-    }
-
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
@@ -88,8 +78,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final success = await authProvider.updateProfile(
       name: user.name, // Keep existing name from social login
       phone: _phoneController.text.trim(),
-      wilayaId: _selectedWilaya!.id,
-      communeId: _selectedCommune!.id,
+      wilayaId: _selectedWilaya?.id,
+      communeId: _selectedCommune?.id,
     );
 
     if (success && mounted) {
@@ -154,26 +144,29 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       initialValue: _selectedWilaya,
                       isExpanded: true,
                       decoration: InputDecoration(
-                        labelText: 'Wilaya',
+                        labelText: 'Wilaya (optionnel)',
                         prefixIcon: const Icon(Icons.location_city_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      items: _wilayas
-                          .map((w) => DropdownMenuItem(
-                                value: w,
-                                child: Text('${w.code} - ${w.name}'),
-                              ))
-                          .toList(),
+                      items: [
+                        const DropdownMenuItem<Wilaya>(
+                          value: null,
+                          child: Text('Aucune'),
+                        ),
+                        ..._wilayas.map((w) => DropdownMenuItem(
+                              value: w,
+                              child: Text('${w.code} - ${w.name}'),
+                            )),
+                      ],
                       onChanged: (wilaya) {
-                        setState(() => _selectedWilaya = wilaya);
+                        setState(() {
+                          _selectedWilaya = wilaya;
+                          _selectedCommune = null;
+                          _communes = [];
+                        });
                         if (wilaya != null) _loadCommunes(wilaya.id);
-                      },
-                      validator: (value) {
-                        if (value == null)
-                          return 'Veuillez sélectionner une wilaya';
-                        return null;
                       },
                     ),
               const SizedBox(height: 16),
@@ -185,28 +178,27 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       initialValue: _selectedCommune,
                       isExpanded: true,
                       decoration: InputDecoration(
-                        labelText: 'Commune',
+                        labelText: 'Commune (optionnel)',
                         prefixIcon: const Icon(Icons.location_on_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      items: _communes
-                          .map((c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(c.name),
-                              ))
-                          .toList(),
+                      items: [
+                        const DropdownMenuItem<Commune>(
+                          value: null,
+                          child: Text('Aucune'),
+                        ),
+                        ..._communes.map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c.name),
+                            )),
+                      ],
                       onChanged: _selectedWilaya == null
                           ? null
                           : (commune) {
                               setState(() => _selectedCommune = commune);
                             },
-                      validator: (value) {
-                        if (value == null)
-                          return 'Veuillez sélectionner une commune';
-                        return null;
-                      },
                     ),
               const SizedBox(height: 32),
 

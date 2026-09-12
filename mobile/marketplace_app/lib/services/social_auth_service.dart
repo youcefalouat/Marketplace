@@ -1,4 +1,5 @@
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 /// Result of a social sign-in attempt.
 class SocialAuthResult {
@@ -7,6 +8,10 @@ class SocialAuthResult {
   final String email;
   final String name;
   final String? accessToken;
+  final String? identityToken;
+  final String? authorizationCode;
+  final String? firstName;
+  final String? lastName;
 
   SocialAuthResult({
     required this.provider,
@@ -14,6 +19,10 @@ class SocialAuthResult {
     required this.email,
     required this.name,
     this.accessToken,
+    this.identityToken,
+    this.authorizationCode,
+    this.firstName,
+    this.lastName,
   });
 }
 
@@ -60,6 +69,50 @@ class SocialAuthService {
       throw Exception('Erreur Google Sign-In: ${e.description ?? e.code}');
     } catch (e) {
       throw Exception('Erreur Google Sign-In: $e');
+    }
+  }
+
+  /// Launch the native Apple sign-in flow. Returns null if the user cancels.
+  static Future<SocialAuthResult?> signInWithApple() async {
+    try {
+      if (!await SignInWithApple.isAvailable()) {
+        throw Exception('La connexion avec Apple n’est pas disponible');
+      }
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        throw Exception('Apple n’a pas fourni de jeton d’identité');
+      }
+
+      final name = [credential.givenName, credential.familyName]
+          .whereType<String>()
+          .where((part) => part.isNotEmpty)
+          .join(' ');
+
+      return SocialAuthResult(
+        provider: 'Apple',
+        providerId: credential.userIdentifier ?? '',
+        email: credential.email ?? '',
+        name: name.isEmpty ? 'Utilisateur' : name,
+        identityToken: identityToken,
+        authorizationCode: credential.authorizationCode,
+        firstName: credential.givenName,
+        lastName: credential.familyName,
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) return null;
+      throw Exception('Erreur Apple Sign-In: ${e.message}');
+    } on SignInWithAppleException catch (e) {
+      throw Exception('Erreur Apple Sign-In: $e');
+    } catch (e) {
+      throw Exception('Erreur Apple Sign-In: $e');
     }
   }
 

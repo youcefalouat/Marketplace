@@ -21,11 +21,9 @@ public class RegisterDto
     [Phone]
     public string Phone { get; set; } = string.Empty;
     
-    [Required]
-    public int WilayaId { get; set; }
+    public int? WilayaId { get; set; }
     
-    [Required]
-    public int CommuneId { get; set; }
+    public int? CommuneId { get; set; }
 }
 
 public class LoginDto
@@ -55,6 +53,23 @@ public class SocialLoginDto
     public string? AccessToken { get; set; }
 }
 
+public class AppleLoginDto
+{
+    [Required]
+    public string IdentityToken { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The authorization code from Sign in with Apple, exchanged server-side
+    /// with Apple's token endpoint using the generated client secret.
+    /// </summary>
+    [Required]
+    public string AuthorizationCode { get; set; } = string.Empty;
+    
+    public string? FirstName { get; set; }
+    
+    public string? LastName { get; set; }
+}
+
 public class AuthResponseDto
 {
     public string Token { get; set; } = string.Empty;
@@ -68,8 +83,8 @@ public class UserDto
     public string Email { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
-    public int WilayaId { get; set; }
-    public int CommuneId { get; set; }
+    public int? WilayaId { get; set; }
+    public int? CommuneId { get; set; }
     public string WilayaName { get; set; } = string.Empty;
     public string CommuneName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
@@ -89,11 +104,9 @@ public class UpdateProfileDto
     [Phone]
     public string Phone { get; set; } = string.Empty;
     
-    [Required]
-    public int WilayaId { get; set; }
+    public int? WilayaId { get; set; }
     
-    [Required]
-    public int CommuneId { get; set; }
+    public int? CommuneId { get; set; }
 }
 
 public class SendVerificationDto
