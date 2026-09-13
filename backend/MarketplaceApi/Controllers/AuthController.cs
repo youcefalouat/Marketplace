@@ -276,7 +276,7 @@ public class AuthController : ControllerBase
                 ValidAudience = _appleSettings.BundleId,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
-                ValidAlgorithms = new[] { "ES256" },
+                ValidAlgorithms = new[] { "RS256" },
                 IssuerSigningKeys = jwks.GetSigningKeys()
             };
 
