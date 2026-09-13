@@ -262,7 +262,11 @@ public class AuthController : ControllerBase
         try
         {
             // ── Step 1: Validate the identity token via Apple's JWKS ──
-            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler
+            {
+                // Keep JWT claim names such as "sub" and "email" unchanged.
+                MapInboundClaims = false
+            };
 
             using var httpClient = new HttpClient();
             var jwksResponse = await httpClient.GetStringAsync("https://appleid.apple.com/auth/keys");
@@ -276,6 +280,8 @@ public class AuthController : ControllerBase
                 ValidAudience = _appleSettings.BundleId,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
+                RequireSignedTokens = true,
+                RequireExpirationTime = true,
                 ValidAlgorithms = new[] { "RS256" },
                 IssuerSigningKeys = jwks.GetSigningKeys()
             };
@@ -292,51 +298,58 @@ public class AuthController : ControllerBase
                 return BadRequest(new { message = "Jeton Apple invalide, subject manquant" });
 
             // ── Step 2: Exchange authorization code with Apple's token endpoint ──
-            if (!string.IsNullOrEmpty(_appleSettings.PrivateKey))
+            if (string.IsNullOrWhiteSpace(_appleSettings.PrivateKey))
             {
-                var clientSecret = GenerateAppleClientSecret();
-
-                var tokenResponse = await httpClient.PostAsync(
-                    "https://appleid.apple.com/auth/token",
-                    new FormUrlEncodedContent(new Dictionary<string, string>
-                    {
-                        ["client_id"] = _appleSettings.BundleId,
-                        ["client_secret"] = clientSecret,
-                        ["code"] = dto.AuthorizationCode,
-                        ["grant_type"] = "authorization_code"
-                    }));
-
-                if (!tokenResponse.IsSuccessStatusCode)
-                {
-                    var errorBody = await tokenResponse.Content.ReadAsStringAsync();
-                    _logger.LogWarning(
-                        "Apple token exchange failed ({Status}): {Body}",
-                        tokenResponse.StatusCode, errorBody);
-                    return BadRequest(new { message = "Échec de la vérification du code Apple" });
-                }
-
-                // The id_token returned by Apple's /auth/token is the canonical
-                // source of truth. Parse it to confirm the subject matches.
-                var body = await tokenResponse.Content.ReadAsStringAsync();
-                var tokenJson = System.Text.Json.JsonDocument.Parse(body);
-                if (tokenJson.RootElement.TryGetProperty("id_token", out var idTokenProp))
-                {
-                    var exchangedToken = handler.ReadJwtToken(idTokenProp.GetString());
-                    var exchangedSub = exchangedToken.Subject;
-                    if (exchangedSub != subject)
-                    {
-                        _logger.LogWarning(
-                            "Apple subject mismatch: identity_token sub={IdSub}, token_exchange sub={ExSub}",
-                            subject, exchangedSub);
-                        return BadRequest(new { message = "Incohérence du jeton Apple" });
-                    }
-                }
+                _logger.LogError("Apple PrivateKey is not configured");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    new { message = "La connexion Apple est temporairement indisponible" });
             }
-            else
+
+            var clientSecret = GenerateAppleClientSecret();
+
+            var tokenResponse = await httpClient.PostAsync(
+                "https://appleid.apple.com/auth/token",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = _appleSettings.BundleId,
+                    ["client_secret"] = clientSecret,
+                    ["code"] = dto.AuthorizationCode,
+                    ["grant_type"] = "authorization_code"
+                }));
+
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                var errorBody = await tokenResponse.Content.ReadAsStringAsync();
+                _logger.LogWarning(
+                    "Apple token exchange failed ({Status}): {Body}",
+                    tokenResponse.StatusCode, errorBody);
+                return BadRequest(new { message = "Échec de la vérification du code Apple" });
+            }
+
+            // Validate the token returned by Apple's authorization-code exchange,
+            // rather than merely decoding it.
+            var body = await tokenResponse.Content.ReadAsStringAsync();
+            using var tokenJson = System.Text.Json.JsonDocument.Parse(body);
+            if (!tokenJson.RootElement.TryGetProperty("id_token", out var idTokenProp))
+                return BadRequest(new { message = "Apple n’a pas retourné de jeton d’identité" });
+
+            var exchangedIdToken = idTokenProp.GetString();
+            if (string.IsNullOrWhiteSpace(exchangedIdToken))
+                return BadRequest(new { message = "Apple n’a pas retourné de jeton d’identité" });
+
+            var exchangedPrincipal = handler.ValidateToken(
+                exchangedIdToken,
+                validationParameters,
+                out _);
+            var exchangedSub = exchangedPrincipal.FindFirst("sub")?.Value;
+
+            if (!string.Equals(exchangedSub, subject, StringComparison.Ordinal))
             {
                 _logger.LogWarning(
-                    "Apple PrivateKey is not configured — skipping authorization code exchange. "
-                    + "Identity token validation only.");
+                    "Apple subject mismatch: identity_sub={IdSub}, exchanged_sub={ExSub}",
+                    subject,
+                    exchangedSub);
+                return BadRequest(new { message = "Incohérence du jeton Apple" });
             }
 
             // ── Step 3: Find or create user ──
@@ -403,10 +416,17 @@ public class AuthController : ControllerBase
             _logger.LogWarning(ex, "Apple identity token validation failed");
             return BadRequest(new { message = "Le jeton Apple fourni est invalide ou a expiré" });
         }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Apple service is unavailable");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "Le service Apple est temporairement indisponible" });
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erreur lors de la validation du jeton Apple");
-            return BadRequest(new { message = "Le jeton Apple fourni est invalide ou a expiré" });
+            _logger.LogError(ex, "Unexpected Apple Sign-In error");
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Erreur interne lors de la connexion Apple" });
         }
     }
 
