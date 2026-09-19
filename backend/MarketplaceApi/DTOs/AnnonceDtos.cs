@@ -50,6 +50,7 @@ public class DeleteAnnonceDto
 public class AnnonceListDto
 {
     public int Id { get; set; }
+    public int SellerId { get; set; }
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string WilayaName { get; set; } = string.Empty;

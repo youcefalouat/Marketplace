@@ -23,6 +23,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ModerationThread> ModerationThreads { get; set; }
     public DbSet<ModerationMessage> ModerationMessages { get; set; }
     public DbSet<Reservation> Reservations { get; set; }
+    public DbSet<ModerationReport> ModerationReports { get; set; }
+    public DbSet<UserBlock> UserBlocks { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -230,6 +232,32 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(r => r.User)
                 .WithMany()
                 .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ModerationReport>(entity =>
+        {
+            entity.Property(r => r.Type).HasMaxLength(30);
+            entity.Property(r => r.Reason).HasMaxLength(100);
+            entity.Property(r => r.Description).HasMaxLength(2000);
+            entity.Property(r => r.Status).HasMaxLength(30);
+            entity.HasIndex(r => new { r.Status, r.CreatedAt });
+            entity.HasIndex(r => r.ReportedAnnonceId);
+            entity.HasOne(r => r.Reporter).WithMany().HasForeignKey(r => r.ReporterId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.ReportedUser).WithMany().HasForeignKey(r => r.ReportedUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.ReportedAnnonce).WithMany(a => a.ModerationReports)
+                .HasForeignKey(r => r.ReportedAnnonceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserBlock>(entity =>
+        {
+            entity.HasIndex(b => new { b.BlockingUserId, b.BlockedUserId }).IsUnique();
+            entity.HasIndex(b => b.BlockedUserId);
+            entity.HasOne(b => b.BlockingUser).WithMany().HasForeignKey(b => b.BlockingUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(b => b.BlockedUser).WithMany().HasForeignKey(b => b.BlockedUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

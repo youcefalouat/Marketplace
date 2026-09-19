@@ -8,7 +8,7 @@ namespace MarketplaceApi.Services;
 
 public interface IAnnonceFeedService
 {
-    Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null);
+    Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null, IReadOnlyCollection<int>? blockedUserIds = null);
 }
 
 public class AnnonceFeedService : IAnnonceFeedService
@@ -24,13 +24,13 @@ public class AnnonceFeedService : IAnnonceFeedService
         _options = options.Value ?? new FeaturedFeedOptions();
     }
 
-    public async Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null)
+    public async Task<List<AnnonceListDto>> GetFeaturedAnnoncesAsync(int? count, int? userCommuneId = null, int? userWilayaId = null, IReadOnlyCollection<int>? blockedUserIds = null)
     {
         var targetCount = count ?? _options.DefaultCount;
         targetCount = Math.Clamp(targetCount, 1, Math.Max(1, _options.MaxCount));
 
         // Future-proofing: allow "promoted" to be inserted first.
-        var promoted = await GetPromotedAnnoncesAsync(targetCount);
+        var promoted = await GetPromotedAnnoncesAsync(targetCount, blockedUserIds);
         if (promoted.Count >= targetCount) return promoted.Take(targetCount).ToList();
 
         var remaining = targetCount - promoted.Count;
@@ -43,6 +43,8 @@ public class AnnonceFeedService : IAnnonceFeedService
             .Include(a => a.Commune)
             .Include(a => a.Category)
             .Where(a => a.Status == AnnonceStatus.Approved);
+        if (blockedUserIds?.Count > 0)
+            baseQuery = baseQuery.Where(a => !blockedUserIds.Contains(a.UserId));
 
         var randomRaw = await baseQuery
             .Where(a => !promotedIds.Contains(a.Id))
@@ -86,6 +88,7 @@ public class AnnonceFeedService : IAnnonceFeedService
             return new AnnonceListDto
             {
                 Id = a.Id,
+                SellerId = a.SellerId,
                 Title = a.Title,
                 Price = a.Price,
                 WilayaName = a.WilayaName,
@@ -108,7 +111,7 @@ public class AnnonceFeedService : IAnnonceFeedService
         return promoted;
     }
 
-    private async Task<List<AnnonceListDto>> GetPromotedAnnoncesAsync(int count)
+    private async Task<List<AnnonceListDto>> GetPromotedAnnoncesAsync(int count, IReadOnlyCollection<int>? blockedUserIds)
     {
         var promotedRaw = await _context.Annonces
             .AsNoTracking()
@@ -117,6 +120,7 @@ public class AnnonceFeedService : IAnnonceFeedService
             .Include(a => a.Commune)
             .Include(a => a.Category)
             .Where(a => a.Status == AnnonceStatus.Approved && a.IsPromoted)
+            .Where(a => blockedUserIds == null || blockedUserIds.Count == 0 || !blockedUserIds.Contains(a.UserId))
             .OrderBy(a => Guid.NewGuid())
             .Take(count)
             .Select(a => new
@@ -155,6 +159,7 @@ public class AnnonceFeedService : IAnnonceFeedService
             return new AnnonceListDto
             {
                 Id = a.Id,
+                SellerId = a.SellerId,
                 Title = a.Title,
                 Price = a.Price,
                 WilayaName = a.WilayaName,

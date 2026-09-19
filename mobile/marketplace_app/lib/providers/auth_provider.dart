@@ -69,6 +69,18 @@ class AuthProvider with ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<bool> acceptTerms() async {
+    try {
+      _user = await _apiService.acceptTerms();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Register — returns true on success, sets emailVerificationRequired flag
   Future<bool> register({
     required String email,
@@ -77,6 +89,7 @@ class AuthProvider with ChangeNotifier {
     required String phone,
     int? wilayaId,
     int? communeId,
+    bool acceptedTerms = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -91,6 +104,7 @@ class AuthProvider with ChangeNotifier {
         phone: phone,
         wilayaId: wilayaId,
         communeId: communeId,
+        acceptedTerms: acceptedTerms,
       );
       _user = result.user;
       _emailVerificationRequired = result.emailVerificationRequired;
@@ -147,6 +161,7 @@ class AuthProvider with ChangeNotifier {
     required String email,
     required String name,
     String? accessToken,
+    bool acceptedTerms = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -159,6 +174,7 @@ class AuthProvider with ChangeNotifier {
         email: email,
         name: name,
         accessToken: accessToken,
+        acceptedTerms: acceptedTerms,
       );
       _user = authResponse.user;
       _updateFcmToken();
@@ -178,6 +194,7 @@ class AuthProvider with ChangeNotifier {
     required String authorizationCode,
     String? firstName,
     String? lastName,
+    bool acceptedTerms = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -189,6 +206,7 @@ class AuthProvider with ChangeNotifier {
         authorizationCode: authorizationCode,
         firstName: firstName,
         lastName: lastName,
+        acceptedTerms: acceptedTerms,
       );
       _user = authResponse.user;
       _updateFcmToken();

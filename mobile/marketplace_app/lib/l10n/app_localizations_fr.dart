@@ -130,6 +130,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vous devez être connecté pour envoyer un message';
 
   @override
+  String get mustBeLoggedInToReport =>
+      'Vous devez être connecté pour signaler une annonce';
+
+  @override
+  String get mustBeLoggedInToBlock =>
+      'Vous devez être connecté pour bloquer un utilisateur';
+
+  @override
   String get cannotChatWithSelf =>
       'Vous ne pouvez pas discuter sur votre propre annonce';
 
@@ -364,4 +372,65 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get noConversationsFoundHint =>
       'Essayez de rechercher par nom de vendeur, d\'acheteur ou par titre d\'annonce.';
+
+  @override
+  String get termsAgreementTitle => 'Accepter les conditions';
+
+  @override
+  String get termsAgreementText => 'Pour continuer, vous devez accepter les ';
+
+  @override
+  String get termsLink => 'Conditions d\'utilisation';
+
+  @override
+  String get andText => ' et la ';
+
+  @override
+  String get privacyLink => 'Politique de confidentialité';
+
+  @override
+  String get accept => 'Accepter';
+
+  @override
+  String get reportListing => 'Signaler cette annonce';
+
+  @override
+  String get reportReasonOffensive => 'Contenu offensant';
+
+  @override
+  String get reportReasonFraud => 'Arnaque / fraude';
+
+  @override
+  String get reportReasonProhibited => 'Contenu interdit';
+
+  @override
+  String get reportReasonIncorrect => 'Information incorrecte';
+
+  @override
+  String get reportReasonOther => 'Autre';
+
+  @override
+  String get reportDescriptionOptional => 'Description (optionnelle)';
+
+  @override
+  String get reportSubmitted => 'Signalement envoyé';
+
+  @override
+  String get reportError => 'Impossible d\'envoyer le signalement';
+
+  @override
+  String get blockUser => 'Bloquer cet utilisateur';
+
+  @override
+  String get confirmBlock => 'Confirmer le blocage';
+
+  @override
+  String get confirmBlockMessage =>
+      'Voulez-vous vraiment bloquer cet utilisateur ?';
+
+  @override
+  String get userBlocked => 'Utilisateur bloqué';
+
+  @override
+  String get blockError => 'Impossible de bloquer cet utilisateur';
 }

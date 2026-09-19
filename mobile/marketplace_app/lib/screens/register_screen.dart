@@ -12,6 +12,7 @@ import 'home_screen.dart';
 import 'complete_profile_screen.dart';
 import 'phone_verification_screen.dart';
 import 'legal_screen.dart';
+import '../widgets/terms_agreement_dialog.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -109,6 +110,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _phoneController.text.trim(),
       wilayaId: _selectedWilaya?.id,
       communeId: _selectedCommune?.id,
+      acceptedTerms: true,
     );
 
     if (!mounted) return;
@@ -146,12 +148,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final result = await SocialAuthService.signInWithGoogle();
       if (result == null) return;
 
+      if (!await _ensureSocialTerms(result)) return;
+
       final success = await authProvider.socialLogin(
         provider: result.provider,
         providerId: result.providerId,
         email: result.email,
         name: result.name,
         accessToken: result.accessToken,
+        acceptedTerms: true,
       );
 
       if (success && mounted) {
@@ -193,11 +198,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final result = await SocialAuthService.signInWithApple();
       if (result == null) return;
 
+      if (!await _ensureSocialTerms(result)) return;
+
       final success = await authProvider.appleLogin(
         identityToken: result.identityToken!,
         authorizationCode: result.authorizationCode ?? '',
         firstName: result.firstName,
         lastName: result.lastName,
+        acceptedTerms: true,
       );
 
       if (success && mounted) {
@@ -223,6 +231,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     }
+  }
+
+  Future<bool> _ensureSocialTerms(SocialAuthResult result) async {
+    final exists = await ApiService().socialAccountExists(
+      provider: result.provider,
+      providerId: result.providerId,
+      email: result.email,
+    );
+    if (exists || _acceptedTerms) return true;
+    if (!mounted) return false;
+    final accepted = await showTermsAgreementDialog(context);
+    if (accepted) setState(() => _acceptedTerms = true);
+    return accepted;
   }
 
   void _phoneLogin() {

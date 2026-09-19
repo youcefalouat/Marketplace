@@ -6,10 +6,12 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/sellers_provider.dart';
+import '../providers/blocked_users_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/terms_agreement_dialog.dart';
 import 'annonce_detail_screen.dart';
 import 'category_annonces_screen.dart';
 import 'conversation_list_screen.dart';
@@ -38,11 +40,48 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _categoriesError;
   List<AnnonceListItem> _featuredAnnonces = [];
   List<CategoryModel> _leafCategories = [];
+  bool _termsCheckScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _loadAccueilData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleTermsCheck();
+  }
+
+  void _scheduleTermsCheck() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (_termsCheckScheduled ||
+        authProvider.user == null ||
+        !authProvider.user!.requiresTermsAcceptance) {
+      return;
+    }
+
+    _termsCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final accepted = await showTermsAgreementDialog(
+        context,
+        allowCancel: false,
+      );
+      if (!mounted || !accepted) return;
+
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final saved = await auth.acceptTerms();
+      if (!mounted || saved) return;
+
+      _termsCheckScheduled = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.error ?? 'Erreur lors de l\'acceptation des conditions')),
+      );
+      _scheduleTermsCheck();
+    });
   }
 
   Future<void> _loadAccueilData() async {
@@ -309,6 +348,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFeaturedSection() {
     const featuredCarouselHeight = 292.0;
+    final blockedIds = context.watch<BlockedUsersProvider>().blockedUserIds;
+    final visibleFeatured = _featuredAnnonces
+        .where((annonce) => !blockedIds.contains(annonce.sellerId))
+        .toList();
 
     if (_loadingFeatured) {
       return SizedBox(
@@ -338,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (_featuredAnnonces.isEmpty) {
+    if (visibleFeatured.isEmpty) {
       return _buildInfoCard(
         icon: Icons.inbox_outlined,
         message: AppLocalizations.of(context)!.noAnnoncesAvailable,
@@ -349,10 +392,10 @@ class _HomeScreenState extends State<HomeScreen> {
       height: featuredCarouselHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _featuredAnnonces.length,
+        itemCount: visibleFeatured.length,
         separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, index) {
-          final annonce = _featuredAnnonces[index];
+          final annonce = visibleFeatured[index];
           return _FeaturedAnnonceCard(
             annonce: annonce,
             onTap: () {

@@ -1,0 +1,112 @@
+@page "/admin/reports"
+@layout AdminLayout
+@rendermode InteractiveServer
+@using MarketplaceApi.Components.Layout
+@using Microsoft.EntityFrameworkCore
+@using MarketplaceApi.Models
+@inject MarketplaceApi.Data.ApplicationDbContext Db
+
+<h2>Signalements et blocages</h2>
+<p class="text-muted">Les signalements et événements de blocage sont conservés ici pour la revue de modération.</p>
+
+@if (_reports == null)
+{
+    <p><em>Chargement...</em></p>
+}
+else if (_errorMessage != null)
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+else if (_reports.Count == 0)
+{
+    <div class="alert alert-light">Aucun signalement en attente.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr><th>Date</th><th>Type</th><th>Utilisateur</th><th>Contenu</th><th>Motif</th><th>Statut</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var report in _reports)
+                {
+                    <tr>
+                        <td>@report.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td>@(report.Type == "Block" ? "Blocage" : "Annonce")</td>
+                        <td>@report.Reporter.Name → @(report.ReportedUser?.Name ?? "-")</td>
+                        <td>@(report.ReportedAnnonce?.Title ?? "-")</td>
+                        <td>@report.Reason<br /><small>@report.Description</small></td>
+                        <td><span class="badge bg-warning text-dark">@report.Status</span></td>
+                        <td class="text-nowrap">
+                            @if (report.ReportedAnnonceId.HasValue)
+                            {
+                                <a class="btn btn-sm btn-outline-primary me-1"
+                                   href="/admin/annonces/@report.ReportedAnnonceId.Value">
+                                    Ouvrir
+                                </a>
+                            }
+                            <button class="btn btn-sm btn-success me-1"
+                                    disabled="@(_updatingReportId == report.Id)"
+                                    @onclick='() => UpdateStatus(report, "Reviewed")'>
+                                Examiner
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    disabled="@(_updatingReportId == report.Id)"
+                                    @onclick='() => UpdateStatus(report, "Dismissed")'>
+                                Rejeter
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<ModerationReport>? _reports;
+    private int? _updatingReportId;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reports = await Db.ModerationReports
+            .AsNoTracking()
+            .Include(r => r.Reporter)
+            .Include(r => r.ReportedUser)
+            .Include(r => r.ReportedAnnonce)
+            .Where(r => r.Status == "Pending")
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task UpdateStatus(ModerationReport report, string status)
+    {
+        if (_updatingReportId.HasValue) return;
+
+        _updatingReportId = report.Id;
+        _errorMessage = null;
+        try
+        {
+            var storedReport = await Db.ModerationReports.FindAsync(report.Id);
+            if (storedReport == null)
+            {
+                _errorMessage = "Ce signalement n'existe plus.";
+                return;
+            }
+
+            storedReport.Status = status;
+            await Db.SaveChangesAsync();
+            _reports?.Remove(report);
+        }
+        catch
+        {
+            _errorMessage = "Impossible de mettre à jour le signalement.";
+        }
+        finally
+        {
+            _updatingReportId = null;
+        }
+    }
+}

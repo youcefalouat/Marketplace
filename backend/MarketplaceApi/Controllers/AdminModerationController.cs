@@ -20,6 +20,45 @@ public class AdminModerationController : ControllerBase
         _context = context;
     }
 
+    [HttpGet("reports")]
+    public async Task<ActionResult<List<ModerationReportDto>>> GetReports([FromQuery] string? status = "Pending")
+    {
+        var query = _context.ModerationReports.AsNoTracking()
+            .Include(r => r.Reporter)
+            .Include(r => r.ReportedUser)
+            .Include(r => r.ReportedAnnonce)
+            .AsQueryable();
+        if (!string.IsNullOrWhiteSpace(status)) query = query.Where(r => r.Status == status);
+
+        var reports = await query.OrderByDescending(r => r.CreatedAt).Select(r => new ModerationReportDto
+        {
+            Id = r.Id,
+            Type = r.Type,
+            Reason = r.Reason,
+            Description = r.Description,
+            Status = r.Status,
+            CreatedAt = r.CreatedAt,
+            ReporterId = r.ReporterId,
+            ReporterName = r.Reporter.Name,
+            ReportedUserId = r.ReportedUserId,
+            ReportedUserName = r.ReportedUser == null ? null : r.ReportedUser.Name,
+            ReportedAnnonceId = r.ReportedAnnonceId,
+            ReportedAnnonceTitle = r.ReportedAnnonce == null ? null : r.ReportedAnnonce.Title
+        }).ToListAsync();
+        return Ok(reports);
+    }
+
+    [HttpPost("reports/{reportId:int}/status")]
+    public async Task<IActionResult> UpdateReportStatus(int reportId, [FromBody] UpdateModerationReportStatusDto dto)
+    {
+        var report = await _context.ModerationReports.FindAsync(reportId);
+        if (report == null) return NotFound();
+        if (dto.Status is not ("Pending" or "Reviewed" or "Dismissed")) return BadRequest();
+        report.Status = dto.Status;
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>
     /// Create (or reuse) a moderation thread for an annonce and send the first admin message.
     /// Also moves the annonce to UnderReview while the thread is active.

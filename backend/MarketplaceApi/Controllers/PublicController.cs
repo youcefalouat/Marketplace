@@ -18,17 +18,17 @@ public class PublicController : ControllerBase
     [HttpGet("terms")]
     public IActionResult GetTerms()
     {
-        const string cacheKey = "legal_terms_v1";
-        if (_cache.TryGetValue(cacheKey, out LegalDocumentResponseDto? cached))
+        const string cacheKey = "legal_terms_v2";
+        if (_cache.TryGetValue(cacheKey, out LegalContentDto? cached))
             return Ok(cached);
 
-        var document = new LegalDocumentResponseDto
+        var document = new LegalContentDto
         {
-            Title = "Conditions Générales d'Utilisation",
-            Version = "1.0",
-            LastUpdated = LegalDocumentStore.TermsUpdatedAt.ToString("yyyy-MM-dd"),
-            Language = "fr",
-            Content = LegalDocumentStore.TermsHtml
+            TitleFr = "Conditions Générales d'Utilisation",
+            ContentFr = LegalDocumentStore.TermsMarkdown,
+            TitleAr = "شروط الاستخدام",
+            ContentAr = LegalDocumentStore.TermsMarkdownAr,
+            UpdatedAt = LegalDocumentStore.TermsUpdatedAt
         };
 
         _cache.Set(cacheKey, document, TimeSpan.FromHours(24));

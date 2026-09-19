@@ -5,6 +5,7 @@ import '../widgets/app_states.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/annonces_provider.dart';
+import '../providers/blocked_users_provider.dart';
 import '../models/models.dart';
 import '../models/seller_models.dart';
 import '../theme/app_colors.dart';
@@ -659,6 +660,9 @@ class _SearchScreenState extends State<SearchScreen>
     return Consumer<AnnoncesProvider>(
       builder: (context, provider, child) {
         final l10n = AppLocalizations.of(context)!;
+        final visibleAnnonces = provider.annonces
+            .where((annonce) => !context.watch<BlockedUsersProvider>().blockedUserIds.contains(annonce.sellerId))
+            .toList();
 
         if (provider.isLoading && provider.annonces.isEmpty) {
           return GridView.builder(
@@ -683,7 +687,7 @@ class _SearchScreenState extends State<SearchScreen>
           );
         }
 
-        if (provider.annonces.isEmpty) {
+        if (visibleAnnonces.isEmpty) {
           return AppEmptyState(
             icon: Icons.inbox_outlined,
             title: l10n.noAnnoncesFound,
@@ -703,14 +707,14 @@ class _SearchScreenState extends State<SearchScreen>
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
-            itemCount: provider.annonces.length + (provider.hasMore ? 1 : 0),
+            itemCount: visibleAnnonces.length + (provider.hasMore ? 1 : 0),
             itemBuilder: (context, index) {
-              if (index >= provider.annonces.length) {
+              if (index >= visibleAnnonces.length) {
                 return const Center(
                   child: CircularProgressIndicator(),
                 );
               }
-              return _buildAnnonceCard(provider.annonces[index]);
+              return _buildAnnonceCard(visibleAnnonces[index]);
             },
           ),
         );

@@ -69,4 +69,5 @@ public class Annonce
     public ICollection<AnnonceImage> Images { get; set; } = new List<AnnonceImage>();
     public ICollection<AdminNote> AdminNotes { get; set; } = new List<AdminNote>();
     public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
+    public ICollection<ModerationReport> ModerationReports { get; set; } = new List<ModerationReport>();
 }

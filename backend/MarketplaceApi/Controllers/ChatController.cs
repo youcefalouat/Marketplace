@@ -117,6 +117,7 @@ public class ChatController : ControllerBase
         var participant = await GetConversationParticipantAsync(id, cancellationToken);
         if (participant == null) return NotFound();
         if (!participant.Contains(userId.Value)) return Forbid();
+        if (await IsBlockedConversationAsync(participant, userId.Value, cancellationToken)) return Forbid();
 
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
@@ -164,6 +165,7 @@ public class ChatController : ControllerBase
         var participant = await GetConversationParticipantAsync(id, cancellationToken);
         if (participant == null) return NotFound();
         if (!participant.Contains(userId.Value)) return Forbid();
+        if (await IsBlockedConversationAsync(participant, userId.Value, cancellationToken)) return Forbid();
 
         return Ok(await MarkConversationAsReadInternalAsync(participant, userId.Value, cancellationToken));
     }
@@ -221,6 +223,13 @@ public class ChatController : ControllerBase
             return BadRequest(new { message = "Vous ne pouvez pas demarrer une conversation sur votre propre annonce" });
         }
 
+        if (await _context.UserBlocks.AnyAsync(b =>
+                b.BlockingUserId == userId.Value && b.BlockedUserId == annonce.OwnerId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
         var pendingConversation = new ConversationDto
         {
             Id = 0,
@@ -273,6 +282,9 @@ public class ChatController : ControllerBase
 
             if (conv == null) return NotFound(new { message = "Conversation introuvable" });
             if (conv.BuyerId != userId.Value && conv.SellerId != userId.Value) return Forbid();
+            if (await _context.UserBlocks.AnyAsync(b => b.BlockingUserId == userId.Value &&
+                    (b.BlockedUserId == conv.BuyerId || b.BlockedUserId == conv.SellerId), cancellationToken))
+                return Forbid();
         }
         else
         {
@@ -288,6 +300,9 @@ public class ChatController : ControllerBase
             if (annonce == null) return NotFound(new { message = "Annonce non trouvee" });
             if (annonce.UserId == userId.Value)
                 return BadRequest(new { message = "Vous ne pouvez pas demarrer une conversation sur votre propre annonce" });
+            if (await _context.UserBlocks.AnyAsync(b => b.BlockingUserId == userId.Value &&
+                    b.BlockedUserId == annonce.UserId, cancellationToken))
+                return Forbid();
         }
 
         // ── Transactional writes — wrapped in the execution strategy ─────────
@@ -401,6 +416,9 @@ public class ChatController : ControllerBase
         return _context.Conversations
             .AsNoTracking()
             .Where(c => c.BuyerId == userId || c.SellerId == userId)
+            .Where(c => !_context.UserBlocks.Any(b =>
+                b.BlockingUserId == userId &&
+                (b.BlockedUserId == c.BuyerId || b.BlockedUserId == c.SellerId)))
             .Select(c => new ConversationDto
             {
                 Id = c.Id,
@@ -444,6 +462,13 @@ public class ChatController : ControllerBase
             .Select(c => new ConversationParticipantInfo(c.Id, c.BuyerId, c.SellerId))
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    private Task<bool> IsBlockedConversationAsync(
+        ConversationParticipantInfo participant,
+        int userId,
+        CancellationToken cancellationToken) =>
+        _context.UserBlocks.AnyAsync(b => b.BlockingUserId == userId &&
+            (b.BlockedUserId == participant.BuyerId || b.BlockedUserId == participant.SellerId), cancellationToken);
 
     private async Task<UnreadSummaryDto> BuildUnreadSummaryAsync(int userId, CancellationToken cancellationToken)
     {

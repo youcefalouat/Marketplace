@@ -55,6 +55,10 @@ public class AnnoncesController : ControllerBase
             .Include(a => a.Category)
             .Where(a => a.Status == AnnonceStatus.Approved)
             .AsQueryable();
+
+        var blockedUserIds = await GetBlockedUserIdsAsync();
+        if (blockedUserIds.Count > 0)
+            query = query.Where(a => !blockedUserIds.Contains(a.UserId));
         
         // Apply filters
         if (filter.CategoryId.HasValue)
@@ -133,6 +137,7 @@ public class AnnoncesController : ControllerBase
             return new AnnonceListDto
             {
                 Id = a.Id,
+                SellerId = a.SellerId,
                 Title = a.Title,
                 Price = a.Price,
                 WilayaName = a.WilayaName,
@@ -176,6 +181,12 @@ public class AnnoncesController : ControllerBase
             return NotFound(new { message = "Cette annonce n'existe pas." });
         }
 
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId.HasValue && await _context.UserBlocks.AnyAsync(b =>
+                b.BlockingUserId == currentUserId.Value &&
+                b.BlockedUserId == _context.Annonces.Where(a => a.Id == id).Select(a => a.UserId).FirstOrDefault()))
+            return Forbid();
+
         var annonce = await _context.Annonces
             .Include(a => a.Images)
             .Include(a => a.User).ThenInclude(u => u.Wilaya)
@@ -210,7 +221,8 @@ public class AnnoncesController : ControllerBase
         [FromQuery] int? communeId,
         [FromQuery] int? wilayaId)
     {
-        var featured = await _feedService.GetFeaturedAnnoncesAsync(count, communeId, wilayaId);
+        var blockedUserIds = await GetBlockedUserIdsAsync();
+        var featured = await _feedService.GetFeaturedAnnoncesAsync(count, communeId, wilayaId, blockedUserIds);
         return Ok(featured);
     }
     
@@ -469,6 +481,16 @@ public class AnnoncesController : ControllerBase
         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
             return null;
         return userId;
+    }
+
+    private async Task<List<int>> GetBlockedUserIdsAsync()
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue) return new List<int>();
+        return await _context.UserBlocks.AsNoTracking()
+            .Where(b => b.BlockingUserId == userId.Value)
+            .Select(b => b.BlockedUserId)
+            .ToListAsync();
     }
     
     private static AnnonceDetailDto MapToDetailDto(Annonce annonce, SellerRatingAggregate? sellerRating)

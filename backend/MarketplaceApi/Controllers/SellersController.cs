@@ -24,6 +24,10 @@ public class SellersController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<SellerProfileDto>> GetSellerProfile(int id)
     {
+        var viewerId = GetCurrentUserId();
+        if (viewerId.HasValue && await _context.UserBlocks.AnyAsync(b =>
+                b.BlockingUserId == viewerId.Value && b.BlockedUserId == id))
+            return Forbid();
         var user = await _context.Users
             .AsNoTracking()
             .Include(u => u.Wilaya)
@@ -67,6 +71,11 @@ public class SellersController : ControllerBase
         if (!await _context.Users.AnyAsync(u => u.Id == id && !u.IsDeleted))
             return NotFound(new { message = "Vendeur introuvable" });
 
+        var viewerId = GetCurrentUserId();
+        if (viewerId.HasValue && await _context.UserBlocks.AnyAsync(b =>
+                b.BlockingUserId == viewerId.Value && b.BlockedUserId == id))
+            return Forbid();
+
         pageSize = Math.Clamp(pageSize, 1, 50);
         page = Math.Max(page, 1);
 
@@ -103,7 +112,7 @@ public class SellersController : ControllerBase
             sellerSummaries.TryGetValue(a.SellerId, out var rating);
             return new AnnonceListDto
             {
-                Id = a.Id, Title = a.Title, Price = a.Price,
+                Id = a.Id, SellerId = a.SellerId, Title = a.Title, Price = a.Price,
                 WilayaName = a.WilayaName, CommuneName = a.CommuneName,
                 CategoryId = a.CategoryId, Category = a.CategoryName,
                 CategoryName = a.CategoryName, CategoryArName = a.CategoryArName,
@@ -160,5 +169,11 @@ public class SellersController : ControllerBase
         {
             Items = items, TotalCount = totalCount, Page = page, PageSize = pageSize
         });
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var value = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(value, out var id) ? id : null;
     }
 }

@@ -14,6 +14,7 @@ import '../widgets/star_rating.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/category_localizations.dart';
 import '../providers/reservation_provider.dart';
+import '../providers/blocked_users_provider.dart';
 import 'phone_verification_screen.dart';
 import 'seller_showcase_screen.dart';
 import '../widgets/user_avatar.dart';
@@ -357,6 +358,134 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
     );
   }
 
+  Future<void> _showReportDialog(AnnonceDetail annonce) async {
+    if (!await _ensureSafetyAuthentication(isBlocking: false)) return;
+    final pageContext = context;
+    final l10n = AppLocalizations.of(pageContext)!;
+    final reasons = <String>[
+      l10n.reportReasonOffensive,
+      l10n.reportReasonFraud,
+      l10n.reportReasonProhibited,
+      l10n.reportReasonIncorrect,
+      l10n.reportReasonOther,
+    ];
+    String? selectedReason;
+    final descriptionController = TextEditingController();
+    var submitting = false;
+    await showDialog(
+      context: pageContext,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogStateContext, setDialogState) => AlertDialog(
+          title: Text(l10n.reportListing),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final reason in reasons)
+                  RadioListTile<String>(
+                    value: reason,
+                    groupValue: selectedReason,
+                    title: Text(reason),
+                    onChanged: (value) => setDialogState(() => selectedReason = value),
+                  ),
+                TextField(
+                  controller: descriptionController,
+                  maxLines: 3,
+                  decoration: InputDecoration(labelText: l10n.reportDescriptionOptional),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: Text(l10n.cancel),
+            ),
+            ElevatedButton(
+              onPressed: submitting || selectedReason == null
+                  ? null
+                  : () async {
+                      setDialogState(() => submitting = true);
+                      try {
+                        await ApiService().reportListing(
+                          annonceId: annonce.id,
+                          reason: selectedReason!,
+                          description: descriptionController.text,
+                        );
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        if (mounted) {
+                          ScaffoldMessenger.of(pageContext).showSnackBar(
+                            SnackBar(content: Text(l10n.reportSubmitted)),
+                          );
+                        }
+                      } catch (_) {
+                        setDialogState(() => submitting = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(pageContext).showSnackBar(
+                            SnackBar(content: Text(l10n.reportError)),
+                          );
+                        }
+                      }
+                    },
+              child: Text(l10n.send),
+            ),
+          ],
+        ),
+      ),
+    );
+    descriptionController.dispose();
+  }
+
+  Future<void> _blockSeller(AnnonceDetail annonce) async {
+    if (!await _ensureSafetyAuthentication(isBlocking: true)) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.confirmBlock),
+        content: Text(l10n.confirmBlockMessage),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(l10n.cancel)),
+          ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(l10n.blockUser)),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ApiService().blockUser(annonce.seller.id, annonceId: annonce.id);
+      context.read<BlockedUsersProvider>().add(annonce.seller.id);
+      context.read<AnnoncesProvider>().removeSeller(annonce.seller.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.userBlocked)));
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.blockError)));
+      }
+    }
+  }
+
+  Future<bool> _ensureSafetyAuthentication({required bool isBlocking}) async {
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.isAuthenticated) return true;
+
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isBlocking
+              ? l10n.mustBeLoggedInToBlock
+              : l10n.mustBeLoggedInToReport,
+        ),
+      ),
+    );
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+    return context.mounted && context.read<AuthProvider>().isAuthenticated;
+  }
+
   String _getStateLabel(String state) {
     switch (state.toLowerCase()) {
       case 'new':
@@ -491,6 +620,19 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
         SliverAppBar(
           expandedHeight: 300,
           pinned: true,
+          actions: [
+            if (context.read<AuthProvider>().user?.id != annonce.seller.id)
+              PopupMenuButton<String>(
+              onSelected: (action) {
+                if (action == 'report') _showReportDialog(annonce);
+                if (action == 'block') _blockSeller(annonce);
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'report', child: Text(AppLocalizations.of(context)!.reportListing)),
+                PopupMenuItem(value: 'block', child: Text(AppLocalizations.of(context)!.blockUser)),
+              ],
+            ),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             background: _buildImageGallery(annonce.imageUrls),
           ),

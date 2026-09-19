@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MarketplaceApi.Data;
 using MarketplaceApi.DTOs;
+using MarketplaceApi.Infrastructure;
 using MarketplaceApi.Models;
 using MarketplaceApi.Services;
 
@@ -64,7 +65,9 @@ public class UsersController : ControllerBase
             PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
             AvatarUrl = user.AvatarUrl,
-            IsVerifiedSeller = user.IsVerifiedSeller
+            IsVerifiedSeller = user.IsVerifiedSeller,
+            RequiresTermsAcceptance = !user.TermsAcceptedAt.HasValue ||
+                user.TermsAcceptedAt.Value < LegalDocumentStore.TermsUpdatedAt
         });
     }
 
@@ -125,7 +128,9 @@ public class UsersController : ControllerBase
             PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
             AvatarUrl = user.AvatarUrl,
-            IsVerifiedSeller = user.IsVerifiedSeller
+            IsVerifiedSeller = user.IsVerifiedSeller,
+            RequiresTermsAcceptance = !user.TermsAcceptedAt.HasValue ||
+                user.TermsAcceptedAt.Value < LegalDocumentStore.TermsUpdatedAt
         });
     }
 

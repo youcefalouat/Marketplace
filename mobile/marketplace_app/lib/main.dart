@@ -16,6 +16,7 @@ import 'providers/chat_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/reservation_provider.dart';
+import 'providers/blocked_users_provider.dart';
 import 'providers/sellers_provider.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_colors.dart';
@@ -140,6 +141,14 @@ class _MarketplaceAppState extends State<MarketplaceApp>
         ChangeNotifierProvider(create: (_) => AnnoncesProvider()),
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
         ChangeNotifierProvider(create: (_) => SellersProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, BlockedUsersProvider>(
+          create: (_) => BlockedUsersProvider(),
+          update: (_, authProvider, blockedUsers) {
+            final provider = blockedUsers ?? BlockedUsersProvider();
+            provider.setSession(authProvider.user?.id);
+            return provider;
+          },
+        ),
         ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
           create: (_) => ChatProvider(),
           update: (_, authProvider, chatProvider) {

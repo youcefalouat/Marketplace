@@ -258,4 +258,9 @@ class AnnoncesProvider with ChangeNotifier {
     _selectedAnnonce = null;
     notifyListeners();
   }
+
+  void removeSeller(int sellerId) {
+    _annonces.removeWhere((annonce) => annonce.sellerId == sellerId);
+    notifyListeners();
+  }
 }

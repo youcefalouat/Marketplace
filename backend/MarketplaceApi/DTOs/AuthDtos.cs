@@ -24,6 +24,8 @@ public class RegisterDto
     public int? WilayaId { get; set; }
     
     public int? CommuneId { get; set; }
+
+    public bool AcceptedTerms { get; set; }
 }
 
 public class LoginDto
@@ -51,6 +53,8 @@ public class SocialLoginDto
     public string Name { get; set; } = string.Empty;
     
     public string? AccessToken { get; set; }
+
+    public bool AcceptedTerms { get; set; }
 }
 
 public class AppleLoginDto
@@ -68,6 +72,8 @@ public class AppleLoginDto
     public string? FirstName { get; set; }
     
     public string? LastName { get; set; }
+
+    public bool AcceptedTerms { get; set; }
 }
 
 public class AuthResponseDto
@@ -92,6 +98,7 @@ public class UserDto
     public bool EmailVerified { get; set; }
     public string? AvatarUrl { get; set; }
     public bool IsVerifiedSeller { get; set; }
+    public bool RequiresTermsAcceptance { get; set; }
 }
 
 public class UpdateProfileDto

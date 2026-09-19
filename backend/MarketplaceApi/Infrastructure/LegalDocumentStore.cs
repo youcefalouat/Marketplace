@@ -4,7 +4,9 @@ namespace MarketplaceApi.Infrastructure;
 
 public static class LegalDocumentStore
 {
-    public static readonly DateTime TermsUpdatedAt = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+    // Bump this value whenever the legal text changes. This rollout intentionally
+    // makes every acceptance recorded before 19 September 2026 require review.
+    public static readonly DateTime TermsUpdatedAt = new DateTime(2026, 9, 19, 0, 0, 0, DateTimeKind.Utc);
 
     public static readonly string TermsMarkdown = """
 # Conditions Générales d'Utilisation
@@ -82,6 +84,26 @@ Ces conditions sont régies par le droit algérien. En cas de litige, les tribun
 Pour toute question relative à ces conditions, l'utilisateur peut contacter le support via l'application ou par email à support@marketplace.com.
 """;
 
+    public static readonly string TermsMarkdownAr = """
+    # شروط الاستخدام
+
+    ## 1. مسؤوليات المستخدم
+
+    يجب على المستخدم استخدام المنصة بحسن نية واحترام القوانين والمستخدمين الآخرين، وتقديم معلومات صحيحة عن الإعلانات.
+
+    ## 2. المحتوى والسلوك المحظور
+
+    يُمنع نشر أو تبادل المحتوى المسيء أو غير القانوني أو المحظور، والاحتيال أو التصيد أو انتحال الهوية، كما يُمنع السلوك التعسفي أو التحرش أو الإهانات.
+
+    ## 3. الإشراف
+
+    يمكن لـ Cashbuy إزالة أي إعلان أو رسالة أو محتوى يخالف هذه الشروط، وقد تقيّد أو تعلّق أو تنهي الحسابات المخالفة.
+
+    ## 4. التواصل
+
+    للاستفسار حول هذه الشروط، تواصلوا مع الدعم عبر التطبيق أو على support@marketplace.com.
+    """;
+
     public static readonly string TermsHtml = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -142,7 +164,7 @@ Pour toute question relative à ces conditions, l'utilisateur peut contacter le 
 
         <div class="section">
             <h2>8. Messagerie</h2>
-            <p>La messagerie intégrée doit être utilisée pour échanger des informations liées aux annonces et aux rendez-vous. Les messages doivent être respectueux et pertinents.</p>
+            <p>La messagerie intégrée doit être utilisée pour échanger des informations liées aux annonces et aux rendez-vous. Les messages doivent être respectueux et pertinents. Les comportements abusifs, le harcèlement et les insultes sont interdits.</p>
         </div>
 
         <div class="section">
@@ -155,6 +177,7 @@ Pour toute question relative à ces conditions, l'utilisateur peut contacter le 
                 <li>contenants des éléments contrefaits, dangereux ou réglementés ;</li>
                 <li>visant la fraude, le phishing ou l'usurpation d'identité.</li>
             </ul>
+            <p>Les contenus offensants, les escroqueries et tout contenu illégal ou interdit sont également prohibés. Cashbuy peut retirer tout contenu qui viole ces règles.</p>
         </div>
 
         <div class="section">
@@ -169,7 +192,7 @@ Pour toute question relative à ces conditions, l'utilisateur peut contacter le 
 
         <div class="section">
             <h2>12. Suspension ou résiliation de compte</h2>
-            <p>L'éditeur peut suspendre, restreindre ou supprimer un compte en cas de violation des conditions, de comportement frauduleux ou d'utilisation abusive du service.</p>
+            <p>L'éditeur peut restreindre, suspendre ou résilier un compte en cas de violation des conditions, de comportement frauduleux ou d'utilisation abusive du service.</p>
         </div>
 
         <div class="section">

@@ -75,4 +75,7 @@ public class User
 
     // Verified seller status (set by admin only)
     public bool IsVerifiedSeller { get; set; } = false;
+
+    // Set when the user explicitly accepts the current Terms version.
+    public DateTime? TermsAcceptedAt { get; set; }
 }

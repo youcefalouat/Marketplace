@@ -332,6 +332,18 @@ abstract class AppLocalizations {
   /// **'Vous devez être connecté pour envoyer un message'**
   String get mustBeLoggedInToMessage;
 
+  /// No description provided for @mustBeLoggedInToReport.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vous devez être connecté pour signaler une annonce'**
+  String get mustBeLoggedInToReport;
+
+  /// No description provided for @mustBeLoggedInToBlock.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vous devez être connecté pour bloquer un utilisateur'**
+  String get mustBeLoggedInToBlock;
+
   /// No description provided for @cannotChatWithSelf.
   ///
   /// In fr, this message translates to:
@@ -763,6 +775,126 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Essayez de rechercher par nom de vendeur, d\'acheteur ou par titre d\'annonce.'**
   String get noConversationsFoundHint;
+
+  /// No description provided for @termsAgreementTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Accepter les conditions'**
+  String get termsAgreementTitle;
+
+  /// No description provided for @termsAgreementText.
+  ///
+  /// In fr, this message translates to:
+  /// **'Pour créer votre compte, vous devez accepter les '**
+  String get termsAgreementText;
+
+  /// No description provided for @termsLink.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conditions d\'utilisation'**
+  String get termsLink;
+
+  /// No description provided for @andText.
+  ///
+  /// In fr, this message translates to:
+  /// **' et la '**
+  String get andText;
+
+  /// No description provided for @privacyLink.
+  ///
+  /// In fr, this message translates to:
+  /// **'Politique de confidentialité'**
+  String get privacyLink;
+
+  /// No description provided for @accept.
+  ///
+  /// In fr, this message translates to:
+  /// **'Accepter'**
+  String get accept;
+
+  /// No description provided for @reportListing.
+  ///
+  /// In fr, this message translates to:
+  /// **'Signaler cette annonce'**
+  String get reportListing;
+
+  /// No description provided for @reportReasonOffensive.
+  ///
+  /// In fr, this message translates to:
+  /// **'Contenu offensant'**
+  String get reportReasonOffensive;
+
+  /// No description provided for @reportReasonFraud.
+  ///
+  /// In fr, this message translates to:
+  /// **'Arnaque / fraude'**
+  String get reportReasonFraud;
+
+  /// No description provided for @reportReasonProhibited.
+  ///
+  /// In fr, this message translates to:
+  /// **'Contenu interdit'**
+  String get reportReasonProhibited;
+
+  /// No description provided for @reportReasonIncorrect.
+  ///
+  /// In fr, this message translates to:
+  /// **'Information incorrecte'**
+  String get reportReasonIncorrect;
+
+  /// No description provided for @reportReasonOther.
+  ///
+  /// In fr, this message translates to:
+  /// **'Autre'**
+  String get reportReasonOther;
+
+  /// No description provided for @reportDescriptionOptional.
+  ///
+  /// In fr, this message translates to:
+  /// **'Description (optionnelle)'**
+  String get reportDescriptionOptional;
+
+  /// No description provided for @reportSubmitted.
+  ///
+  /// In fr, this message translates to:
+  /// **'Signalement envoyé'**
+  String get reportSubmitted;
+
+  /// No description provided for @reportError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Impossible d\'envoyer le signalement'**
+  String get reportError;
+
+  /// No description provided for @blockUser.
+  ///
+  /// In fr, this message translates to:
+  /// **'Bloquer cet utilisateur'**
+  String get blockUser;
+
+  /// No description provided for @confirmBlock.
+  ///
+  /// In fr, this message translates to:
+  /// **'Confirmer le blocage'**
+  String get confirmBlock;
+
+  /// No description provided for @confirmBlockMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voulez-vous vraiment bloquer cet utilisateur ?'**
+  String get confirmBlockMessage;
+
+  /// No description provided for @userBlocked.
+  ///
+  /// In fr, this message translates to:
+  /// **'Utilisateur bloqué'**
+  String get userBlocked;
+
+  /// No description provided for @blockError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Impossible de bloquer cet utilisateur'**
+  String get blockError;
 }
 
 class _AppLocalizationsDelegate

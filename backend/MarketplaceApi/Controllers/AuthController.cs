@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using MarketplaceApi.Data;
 using Microsoft.Extensions.Logging;
 using MarketplaceApi.DTOs;
+using MarketplaceApi.Infrastructure;
 using MarketplaceApi.Models;
 using MarketplaceApi.Services;
 
@@ -79,7 +80,9 @@ public class AuthController : ControllerBase
                 PhoneVerified = user.PhoneVerified,
                 EmailVerified = user.EmailVerified,
                 AvatarUrl = user.AvatarUrl,
-                IsVerifiedSeller = user.IsVerifiedSeller
+                IsVerifiedSeller = user.IsVerifiedSeller,
+                RequiresTermsAcceptance = !user.TermsAcceptedAt.HasValue ||
+                    user.TermsAcceptedAt.Value < LegalDocumentStore.TermsUpdatedAt
             }
         };
     }
@@ -99,6 +102,9 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest(new { message = "Données invalides" });
+
+        if (!dto.AcceptedTerms)
+            return BadRequest(new { code = "TERMS_REQUIRED", message = "Veuillez accepter les conditions d'utilisation et la politique de confidentialité." });
 
         var existing = await _context.Users
             .AnyAsync(u => u.Email.ToLower() == dto.Email.ToLower());
@@ -141,7 +147,8 @@ public class AuthController : ControllerBase
             CreatedAt = DateTime.UtcNow,
             EmailVerified = false,
             EmailVerificationCode = verificationToken,
-            EmailVerificationExpiry = DateTime.UtcNow.AddHours(24)
+            EmailVerificationExpiry = DateTime.UtcNow.AddHours(24),
+            TermsAcceptedAt = DateTime.UtcNow
         };
 
         _context.Users.Add(user);
@@ -190,7 +197,45 @@ public class AuthController : ControllerBase
         return Ok(response);
     }
 
+    // ─── POST /api/auth/accept-terms ─── (authenticated)
+
+    [Authorize(AuthenticationSchemes = "Bearer")]
+    [HttpPost("accept-terms")]
+    public async Task<ActionResult<UserDto>> AcceptTerms()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users
+            .Include(u => u.Wilaya)
+            .Include(u => u.Commune)
+            .FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted);
+        if (user == null) return NotFound(new { message = "Utilisateur introuvable" });
+
+        user.TermsAcceptedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var response = await BuildAuthResponse(user);
+        return Ok(response.User);
+    }
+
     // ─── POST /api/auth/social-login ───
+
+    [HttpGet("social-account")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SocialAccountExists(
+        [FromQuery] string provider,
+        [FromQuery] string? providerId,
+        [FromQuery] string? email)
+    {
+        if (string.IsNullOrWhiteSpace(provider)) return BadRequest();
+
+        var exists = await _context.Users.AnyAsync(u =>
+            !u.IsDeleted &&
+            ((!string.IsNullOrWhiteSpace(providerId) && u.Provider == provider && u.ProviderId == providerId) ||
+             (!string.IsNullOrWhiteSpace(email) && u.Email.ToLower() == email.ToLower())));
+        return Ok(new { exists });
+    }
 
     [HttpPost("social-login")]
     public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto dto)
@@ -223,6 +268,9 @@ public class AuthController : ControllerBase
 
         if (user == null)
         {
+            if (!dto.AcceptedTerms)
+                return BadRequest(new { code = "TERMS_REQUIRED", message = "Veuillez accepter les conditions d'utilisation et la politique de confidentialité." });
+
             user = new User
             {
                 Email = dto.Email.Trim().ToLower(),
@@ -237,7 +285,8 @@ public class AuthController : ControllerBase
                 // Google guarantees email ownership
                 EmailVerified = dto.Provider == "Google",
                 VerifiedAt = dto.Provider == "Google" ? DateTime.UtcNow : null,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                TermsAcceptedAt = DateTime.UtcNow
             };
 
             _context.Users.Add(user);
@@ -379,6 +428,9 @@ public class AuthController : ControllerBase
 
             if (user == null)
             {
+                if (!dto.AcceptedTerms)
+                    return BadRequest(new { code = "TERMS_REQUIRED", message = "Veuillez accepter les conditions d'utilisation et la politique de confidentialité." });
+
                 var name = "Utilisateur";
                 if (!string.IsNullOrEmpty(dto.FirstName) || !string.IsNullOrEmpty(dto.LastName))
                 {
@@ -398,7 +450,8 @@ public class AuthController : ControllerBase
                     ProviderId = subject,
                     EmailVerified = true,
                     VerifiedAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    TermsAcceptedAt = DateTime.UtcNow
                 };
 
                 _context.Users.Add(user);
@@ -673,7 +726,9 @@ public class AuthController : ControllerBase
             CommuneName = user.Commune?.Name ?? "",
             Role = user.Role.ToString(),
             PhoneVerified = user.PhoneVerified,
-            EmailVerified = user.EmailVerified
+            EmailVerified = user.EmailVerified,
+            RequiresTermsAcceptance = !user.TermsAcceptedAt.HasValue ||
+                user.TermsAcceptedAt.Value < LegalDocumentStore.TermsUpdatedAt
         });
     }
 
@@ -822,7 +877,10 @@ public class AuthController : ControllerBase
             WilayaName = user.Wilaya?.Name ?? "", CommuneName = user.Commune?.Name ?? "",
             Role = user.Role.ToString(), PhoneVerified = user.PhoneVerified,
             EmailVerified = user.EmailVerified,
-            AvatarUrl = user.AvatarUrl, IsVerifiedSeller = user.IsVerifiedSeller
+            AvatarUrl = user.AvatarUrl,
+            IsVerifiedSeller = user.IsVerifiedSeller,
+            RequiresTermsAcceptance = !user.TermsAcceptedAt.HasValue ||
+                user.TermsAcceptedAt.Value < LegalDocumentStore.TermsUpdatedAt
         });
     }
 

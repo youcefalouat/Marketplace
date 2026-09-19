@@ -128,6 +128,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get mustBeLoggedInToMessage => 'يجب تسجيل الدخول لإرسال رسالة';
 
   @override
+  String get mustBeLoggedInToReport => 'يجب تسجيل الدخول للإبلاغ عن إعلان';
+
+  @override
+  String get mustBeLoggedInToBlock => 'يجب تسجيل الدخول لحظر مستخدم';
+
+  @override
   String get cannotChatWithSelf => 'لا يمكنك الدردشة على إعلانك الخاص';
 
   @override
@@ -355,4 +361,64 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get noConversationsFoundHint =>
       'جرّب البحث باسم البائع أو المشتري أو عنوان الإعلان.';
+
+  @override
+  String get termsAgreementTitle => 'الموافقة على الشروط';
+
+  @override
+  String get termsAgreementText => ' يجب الموافقة على ';
+
+  @override
+  String get termsLink => 'شروط الاستخدام';
+
+  @override
+  String get andText => ' و';
+
+  @override
+  String get privacyLink => 'سياسة الخصوصية';
+
+  @override
+  String get accept => 'موافقة';
+
+  @override
+  String get reportListing => 'الإبلاغ عن هذا الإعلان';
+
+  @override
+  String get reportReasonOffensive => 'محتوى مسيء';
+
+  @override
+  String get reportReasonFraud => 'احتيال / غش';
+
+  @override
+  String get reportReasonProhibited => 'محتوى محظور';
+
+  @override
+  String get reportReasonIncorrect => 'معلومات غير صحيحة';
+
+  @override
+  String get reportReasonOther => 'أخرى';
+
+  @override
+  String get reportDescriptionOptional => 'الوصف (اختياري)';
+
+  @override
+  String get reportSubmitted => 'تم إرسال البلاغ';
+
+  @override
+  String get reportError => 'تعذر إرسال البلاغ';
+
+  @override
+  String get blockUser => 'حظر هذا المستخدم';
+
+  @override
+  String get confirmBlock => 'تأكيد الحظر';
+
+  @override
+  String get confirmBlockMessage => 'هل تريد حقا حظر هذا المستخدم؟';
+
+  @override
+  String get userBlocked => 'تم حظر المستخدم';
+
+  @override
+  String get blockError => 'تعذر حظر هذا المستخدم';
 }

@@ -8,6 +8,8 @@ import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 import 'complete_profile_screen.dart';
+import '../widgets/terms_agreement_dialog.dart';
+import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -70,12 +72,15 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await SocialAuthService.signInWithGoogle();
       if (result == null) return; // user cancelled
 
+      if (!await _ensureSocialTerms(result)) return;
+
       final success = await authProvider.socialLogin(
         provider: result.provider,
         providerId: result.providerId,
         email: result.email,
         name: result.name,
         accessToken: result.accessToken,
+        acceptedTerms: true,
       );
 
       if (success && mounted) {
@@ -117,11 +122,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await SocialAuthService.signInWithApple();
       if (result == null) return;
 
+      if (!await _ensureSocialTerms(result)) return;
+
       final success = await authProvider.appleLogin(
         identityToken: result.identityToken!,
         authorizationCode: result.authorizationCode ?? '',
         firstName: result.firstName,
         lastName: result.lastName,
+        acceptedTerms: true,
       );
 
       if (success && mounted) {
@@ -154,6 +162,17 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     }
+  }
+
+  Future<bool> _ensureSocialTerms(SocialAuthResult result) async {
+    final exists = await ApiService().socialAccountExists(
+      provider: result.provider,
+      providerId: result.providerId,
+      email: result.email,
+    );
+    if (exists) return true;
+    if (!mounted) return false;
+    return showTermsAgreementDialog(context);
   }
 
   void _continueAsGuest() {

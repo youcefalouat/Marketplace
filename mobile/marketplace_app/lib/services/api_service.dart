@@ -250,6 +250,7 @@ class ApiService {
     required String phone,
     int? wilayaId,
     int? communeId,
+    bool acceptedTerms = false,
   }) async {
     final body = <String, dynamic>{
       'email': email,
@@ -258,6 +259,7 @@ class ApiService {
       'phone': phone,
       if (wilayaId != null) 'wilayaId': wilayaId,
       if (communeId != null) 'communeId': communeId,
+      'acceptedTerms': acceptedTerms,
     };
     final response = await _post(
       Uri.parse('$baseUrl/auth/register'),
@@ -314,6 +316,7 @@ class ApiService {
     required String email,
     required String name,
     String? accessToken,
+    bool acceptedTerms = false,
   }) async {
     final response = await _post(
       Uri.parse('$baseUrl/auth/social-login'),
@@ -324,6 +327,7 @@ class ApiService {
         'email': email,
         'name': name,
         'accessToken': accessToken,
+        'acceptedTerms': acceptedTerms,
       }),
     );
 
@@ -343,6 +347,7 @@ class ApiService {
     required String authorizationCode,
     String? firstName,
     String? lastName,
+    bool acceptedTerms = false,
   }) async {
     final response = await _post(
       Uri.parse('$baseUrl/auth/apple-login'),
@@ -352,6 +357,7 @@ class ApiService {
         'authorizationCode': authorizationCode,
         if (firstName != null && firstName.isNotEmpty) 'firstName': firstName,
         if (lastName != null && lastName.isNotEmpty) 'lastName': lastName,
+        'acceptedTerms': acceptedTerms,
       }),
     );
 
@@ -364,6 +370,39 @@ class ApiService {
 
     throw Exception(
         _extractErrorMessage(response, 'Erreur de connexion avec Apple'));
+  }
+
+  Future<User> acceptTerms() async {
+    final headers = await _authHeaders();
+    final response = await _post(
+      Uri.parse('$baseUrl/auth/accept-terms'),
+      headers: headers,
+    );
+
+    if (response.statusCode == 200) {
+      final user = User.fromJson(jsonDecode(response.body));
+      _currentUser = user;
+      return user;
+    }
+
+    throw Exception(_extractErrorMessage(
+        response, 'Erreur lors de l\'acceptation des conditions'));
+  }
+
+  Future<bool> socialAccountExists({
+    required String provider,
+    String? providerId,
+    String? email,
+  }) async {
+    final query = <String, String>{'provider': provider};
+    if (providerId != null && providerId.isNotEmpty) query['providerId'] = providerId;
+    if (email != null && email.isNotEmpty) query['email'] = email;
+    final response = await _get(
+      Uri.parse('$baseUrl/auth/social-account').replace(queryParameters: query),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode != 200) return false;
+    return (jsonDecode(response.body) as Map<String, dynamic>)['exists'] == true;
   }
 
   Future<void> logout() async {
@@ -1202,6 +1241,58 @@ class ApiService {
     }
 
     return 'image/jpeg'; // safe default for camera/gallery photos
+  }
+
+  // ─── Safety endpoints ───
+
+  Future<void> reportListing({
+    required int annonceId,
+    required String reason,
+    String? description,
+  }) async {
+    final response = await authenticatedRequest(
+      '/safety/listings/$annonceId/reports',
+      method: 'POST',
+      body: {
+        'reason': reason,
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+      },
+    );
+    if (response.statusCode == 409) return;
+    if (response.statusCode != 200) {
+      debugPrint('[Safety] report status=${response.statusCode} body=${response.body}');
+      throw Exception(_extractErrorMessage(
+        response,
+        response.statusCode == 404
+            ? 'Fonction de signalement indisponible sur le serveur'
+            : 'Impossible d\'envoyer le signalement',
+      ));
+    }
+  }
+
+  Future<void> blockUser(int userId, {int? annonceId}) async {
+    final response = await authenticatedRequest(
+      '/safety/users/$userId/block',
+      method: 'POST',
+      body: {if (annonceId != null) 'annonceId': annonceId},
+    );
+    if (response.statusCode != 200) {
+      debugPrint('[Safety] block status=${response.statusCode} body=${response.body}');
+      throw Exception(_extractErrorMessage(
+        response,
+        response.statusCode == 404
+            ? 'Fonction de blocage indisponible sur le serveur'
+            : 'Impossible de bloquer cet utilisateur',
+      ));
+    }
+  }
+
+  Future<List<int>> getBlockedUserIds() async {
+    final response = await authenticatedRequest('/safety/blocks', method: 'GET');
+    if (response.statusCode != 200) return [];
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((item) => (item as Map<String, dynamic>)['blockedUserId'] as int).toList();
   }
 
   // ─── Admin endpoints ───

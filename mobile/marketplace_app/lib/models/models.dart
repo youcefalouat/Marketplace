@@ -190,6 +190,7 @@ class User {
   final bool emailVerified;
   final String? avatarUrl;
   final bool isVerifiedSeller;
+  final bool requiresTermsAcceptance;
 
   User({
     required this.id,
@@ -207,6 +208,7 @@ class User {
     this.emailVerified = false,
     this.avatarUrl,
     this.isVerifiedSeller = false,
+    this.requiresTermsAcceptance = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -226,6 +228,7 @@ class User {
       emailVerified: json['emailVerified'] as bool? ?? false,
       avatarUrl: json['avatarUrl'] as String?,
       isVerifiedSeller: json['isVerifiedSeller'] as bool? ?? false,
+      requiresTermsAcceptance: json['requiresTermsAcceptance'] as bool? ?? false,
     );
   }
 
@@ -246,6 +249,7 @@ class User {
       'emailVerified': emailVerified,
       'avatarUrl': avatarUrl,
       'isVerifiedSeller': isVerifiedSeller,
+      'requiresTermsAcceptance': requiresTermsAcceptance,
     };
   }
 }
@@ -338,6 +342,7 @@ class ImageUrlDto {
 
 class AnnonceListItem {
   final int id;
+  final int sellerId;
   final String title;
   final double price;
   final String wilayaName;
@@ -355,6 +360,7 @@ class AnnonceListItem {
 
   AnnonceListItem({
     required this.id,
+    this.sellerId = 0,
     required this.title,
     required this.price,
     required this.wilayaName,
@@ -374,6 +380,7 @@ class AnnonceListItem {
   factory AnnonceListItem.fromJson(Map<String, dynamic> json) {
     return AnnonceListItem(
       id: json['id'] as int,
+      sellerId: json['sellerId'] as int? ?? 0,
       title: json['title'] as String,
       price: (json['price'] as num).toDouble(),
       wilayaName: json['wilayaName'] as String? ?? '',

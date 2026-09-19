@@ -372,6 +372,58 @@ namespace MarketplaceApi.Migrations
                     b.ToTable("ModerationMessages");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ReportedAnnonceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReportedUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReporterId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportedAnnonceId");
+
+                    b.HasIndex("ReportedUserId");
+
+                    b.HasIndex("ReporterId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("ModerationReports");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.ModerationThread", b =>
                 {
                     b.Property<int>("Id")
@@ -522,6 +574,9 @@ namespace MarketplaceApi.Migrations
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("TermsAcceptedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("VerifiedAt")
                         .HasColumnType("datetime2");
 
@@ -538,6 +593,33 @@ namespace MarketplaceApi.Migrations
                     b.HasIndex("WilayaId");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MarketplaceApi.Models.UserBlock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BlockedUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BlockingUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BlockedUserId");
+
+                    b.HasIndex("BlockingUserId", "BlockedUserId")
+                        .IsUnique();
+
+                    b.ToTable("UserBlocks");
                 });
 
             modelBuilder.Entity("MarketplaceApi.Models.UserRating", b =>
@@ -764,6 +846,31 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Thread");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.ModerationReport", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.Annonce", "ReportedAnnonce")
+                        .WithMany("ModerationReports")
+                        .HasForeignKey("ReportedAnnonceId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("MarketplaceApi.Models.User", "ReportedUser")
+                        .WithMany()
+                        .HasForeignKey("ReportedUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MarketplaceApi.Models.User", "Reporter")
+                        .WithMany()
+                        .HasForeignKey("ReporterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReportedAnnonce");
+
+                    b.Navigation("ReportedUser");
+
+                    b.Navigation("Reporter");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.ModerationThread", b =>
                 {
                     b.HasOne("MarketplaceApi.Models.Annonce", "Annonce")
@@ -819,6 +926,25 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("Wilaya");
                 });
 
+            modelBuilder.Entity("MarketplaceApi.Models.UserBlock", b =>
+                {
+                    b.HasOne("MarketplaceApi.Models.User", "BlockedUser")
+                        .WithMany()
+                        .HasForeignKey("BlockedUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MarketplaceApi.Models.User", "BlockingUser")
+                        .WithMany()
+                        .HasForeignKey("BlockingUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BlockedUser");
+
+                    b.Navigation("BlockingUser");
+                });
+
             modelBuilder.Entity("MarketplaceApi.Models.UserRating", b =>
                 {
                     b.HasOne("MarketplaceApi.Models.User", "Rater")
@@ -843,6 +969,8 @@ namespace MarketplaceApi.Migrations
                     b.Navigation("AdminNotes");
 
                     b.Navigation("Images");
+
+                    b.Navigation("ModerationReports");
 
                     b.Navigation("Reservations");
                 });
