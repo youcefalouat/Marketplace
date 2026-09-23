@@ -371,23 +371,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     // Phone field
                     TextFormField(
-                      controller: _phoneController,
-                      enabled: _isEditing,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Téléphone',
-                        prefixIcon: const Icon(Icons.phone_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        controller: _phoneController,
+                        enabled: _isEditing,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'Téléphone',
+                          prefixIcon: const Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ) //,
+                        // validator: (value) {
+                        //   if (value == null || value.isEmpty) {
+                        //     return 'Veuillez entrer votre téléphone';
+                        //   }
+                        //return null;
+                        //},
                         ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez entrer votre téléphone';
-                        }
-                        return null;
-                      },
-                    ),
                     const SizedBox(height: 16),
 
                     // Wilaya dropdown

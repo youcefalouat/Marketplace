@@ -377,7 +377,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get termsAgreementTitle => 'Accepter les conditions';
 
   @override
-  String get termsAgreementText => 'Pour continuer, vous devez accepter les ';
+  String get termsAgreementText =>
+      'Pour créer votre compte, vous devez accepter les ';
 
   @override
   String get termsLink => 'Conditions d\'utilisation';

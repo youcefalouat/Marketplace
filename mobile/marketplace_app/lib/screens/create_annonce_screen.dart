@@ -61,7 +61,7 @@ class _CreateAnnonceScreenState extends State<CreateAnnonceScreen> {
   void _checkPhoneVerification() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
-      if (user != null && !user.phoneVerified) {
+      if (user != null && (user.phone.isEmpty || !user.phoneVerified)) {
         showDialog(
           context: context,
           barrierDismissible: false,

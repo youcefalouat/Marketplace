@@ -9,7 +9,6 @@ import '../services/social_auth_service.dart';
 import '../theme/app_colors.dart';
 import 'email_verification_screen.dart';
 import 'home_screen.dart';
-import 'complete_profile_screen.dart';
 import 'phone_verification_screen.dart';
 import 'legal_screen.dart';
 import '../widgets/terms_agreement_dialog.dart';
@@ -160,17 +159,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (success && mounted) {
-        if (authProvider.user?.phone.isEmpty ?? true) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -409,18 +401,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'Téléphone',
+                    labelText: 'Téléphone (optionnel)',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer votre numéro de téléphone';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 16),
 

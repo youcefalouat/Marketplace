@@ -7,7 +7,6 @@ import '../widgets/app_logo.dart';
 import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
-import 'complete_profile_screen.dart';
 import '../widgets/terms_agreement_dialog.dart';
 import '../services/api_service.dart';
 
@@ -84,17 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success && mounted) {
-        if (authProvider.user?.phone.isEmpty ?? true) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -133,17 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success && mounted) {
-        if (authProvider.user?.phone.isEmpty ?? true) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

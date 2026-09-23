@@ -26,6 +26,7 @@ class AuthProvider with ChangeNotifier {
 
   void setUser(User user) {
     _user = user;
+    _apiService.setCurrentUser(user);
     notifyListeners();
   }
 
@@ -86,7 +87,7 @@ class AuthProvider with ChangeNotifier {
     required String email,
     required String password,
     required String name,
-    required String phone,
+    String phone = '',
     int? wilayaId,
     int? communeId,
     bool acceptedTerms = false,

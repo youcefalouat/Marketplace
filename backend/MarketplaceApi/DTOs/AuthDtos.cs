@@ -17,9 +17,8 @@ public class RegisterDto
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
     
-    [Required]
     [Phone]
-    public string Phone { get; set; } = string.Empty;
+    public string? Phone { get; set; }
     
     public int? WilayaId { get; set; }
     
@@ -107,9 +106,8 @@ public class UpdateProfileDto
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
     
-    [Required]
     [Phone]
-    public string Phone { get; set; } = string.Empty;
+    public string? Phone { get; set; }
     
     public int? WilayaId { get; set; }
     

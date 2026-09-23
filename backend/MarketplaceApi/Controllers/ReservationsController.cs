@@ -34,7 +34,7 @@ public class ReservationsController : ControllerBase
         var user = await _context.Users.FindAsync(userId.Value);
         if (user == null) return Unauthorized();
 
-        if (!user.PhoneVerified)
+        if (string.IsNullOrWhiteSpace(user.Phone) || !user.PhoneVerified)
             return StatusCode(403, new
             {
                 message = "Veuillez vérifier votre numéro de téléphone avant de réserver",

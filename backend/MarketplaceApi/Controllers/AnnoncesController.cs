@@ -247,7 +247,7 @@ public class AnnoncesController : ControllerBase
         }
         
         // Check phone verification
-        if (!user.PhoneVerified)
+        if (string.IsNullOrWhiteSpace(user.Phone) || !user.PhoneVerified)
         {
             return StatusCode(403, new { message = "Veuillez vérifier votre numéro de téléphone avant de publier une annonce", requiresPhoneVerification = true });
         }

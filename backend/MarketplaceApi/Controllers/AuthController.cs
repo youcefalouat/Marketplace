@@ -140,7 +140,9 @@ public class AuthController : ControllerBase
             Email = dto.Email.Trim().ToLower(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Name = dto.Name.Trim(),
-            Phone = dto.Phone.Trim(),
+            // The existing Users.Phone column accepts an empty value. Keep the
+            // phone empty and unverified until the user voluntarily verifies it.
+            Phone = dto.Phone?.Trim() ?? string.Empty,
             WilayaId = dto.WilayaId,
             CommuneId = dto.CommuneId,
             Role = UserRole.User,

@@ -101,7 +101,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       final updatedUser = await ApiService().verifyPhone(code);
       if (!mounted) return;
 
-      // Update auth provider with verified user
+      // The verification response contains the submitted phone number and
+      // its verified state. Keep both auth caches in sync immediately.
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       authProvider.setUser(updatedUser);
 

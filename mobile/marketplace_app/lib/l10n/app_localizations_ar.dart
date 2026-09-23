@@ -366,7 +366,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get termsAgreementTitle => 'الموافقة على الشروط';
 
   @override
-  String get termsAgreementText => ' يجب الموافقة على ';
+  String get termsAgreementText => 'لإنشاء حسابك، يجب الموافقة على ';
 
   @override
   String get termsLink => 'شروط الاستخدام';

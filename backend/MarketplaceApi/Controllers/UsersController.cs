@@ -108,7 +108,19 @@ public class UsersController : ControllerBase
         // }
         
         user.Name = dto.Name;
-        user.Phone = dto.Phone;
+
+        var normalizedPhone = dto.Phone?.Trim() ?? string.Empty;
+        if (!string.Equals(user.Phone, normalizedPhone, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(normalizedPhone))
+        {
+            // Clearing or changing the number invalidates the previous phone
+            // verification. Verification can be completed again when needed.
+            user.PhoneVerified = false;
+            user.PhoneVerificationCode = null;
+            user.PhoneVerificationExpiry = null;
+        }
+
+        user.Phone = normalizedPhone;
         user.WilayaId = dto.WilayaId;
         user.CommuneId = dto.CommuneId;
         

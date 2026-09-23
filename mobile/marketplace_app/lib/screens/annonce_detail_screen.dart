@@ -246,8 +246,9 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
       return;
     }
 
-    if (authProvider.user?.phoneVerified != true) {
-      await showDialog(
+    if (authProvider.user?.phone.isEmpty == true ||
+        authProvider.user?.phoneVerified != true) {
+      final verified = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Vérification requise'),
@@ -260,18 +261,18 @@ class _AnnonceDetailScreenState extends State<AnnonceDetailScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(ctx);
-                await Navigator.push(
+                final phoneVerified = await Navigator.push<bool>(
                     context,
                     MaterialPageRoute(
                         builder: (_) => const PhoneVerificationScreen()));
+                if (ctx.mounted) Navigator.pop(ctx, phoneVerified == true);
               },
               child: const Text('Vérifier'),
             ),
           ],
         ),
       );
-      return;
+      if (verified != true) return;
     }
 
     bool isSubmitting = false;
